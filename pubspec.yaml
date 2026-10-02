@@ -1,0 +1,29 @@
+name: singbook
+description: 내 노래책 - 코인노래방 키 기록 앱
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  sqflite: ^2.3.3
+  path: ^1.9.0
+  google_fonts: ^6.1.0
+  cached_network_image: ^3.3.1
+  dio: ^5.4.3+1
+  provider: ^6.1.2
+  share_plus: ^10.0.0
+  record: ^5.1.2
+  crypto: ^3.0.3
+  path_provider: ^2.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
