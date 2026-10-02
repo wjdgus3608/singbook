@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+import '../config/api_keys.dart';
 
 class AcrResult {
   final String title;
@@ -24,10 +25,9 @@ class AcrCloudService {
   factory AcrCloudService() => _instance;
   AcrCloudService._();
 
-  // ACRCloud credentials — host from console project page
-  static const _host = 'identify-ap-southeast-1.acrcloud.com';
-  static const _accessKey = '87e115edf100ce03634fa1ccd051be48';
-  static const _accessSecret = 'EFoJf97wY4dDYSZygh6N7aK2jQjHV73gl9u9XPFx';
+  static String get _host => ApiKeys.acrHost;
+  static String get _accessKey => ApiKeys.acrAccessKey;
+  static String get _accessSecret => ApiKeys.acrAccessSecret;
 
   final _recorder = AudioRecorder();
   final _dio = Dio();

@@ -1,14 +1,12 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import '../config/api_keys.dart';
 import '../models/song.dart';
 
 class SpotifyService {
   static final SpotifyService _instance = SpotifyService._();
   factory SpotifyService() => _instance;
   SpotifyService._();
-
-  static const _clientId = '0d97c8af532d4b5ab5cb6fd0e64f2a1d';
-  static const _clientSecret = '1e1dfb7c918e4ab8aa42d2835963607a';
 
   final _dio = Dio();
   String? _token;
@@ -18,7 +16,8 @@ class SpotifyService {
     if (_token != null && _tokenExpiry != null && DateTime.now().isBefore(_tokenExpiry!)) {
       return;
     }
-    final credentials = base64Encode(utf8.encode('$_clientId:$_clientSecret'));
+    final credentials = base64Encode(
+        utf8.encode('${ApiKeys.spotifyClientId}:${ApiKeys.spotifyClientSecret}'));
     final res = await _dio.post(
       'https://accounts.spotify.com/api/token',
       data: 'grant_type=client_credentials',
@@ -36,12 +35,7 @@ class SpotifyService {
     await _ensureToken();
     final res = await _dio.get(
       'https://api.spotify.com/v1/search',
-      queryParameters: {
-        'q': query,
-        'type': 'track',
-        'market': 'KR',
-        'limit': 20,
-      },
+      queryParameters: {'q': query, 'type': 'track', 'market': 'KR', 'limit': 20},
       options: Options(headers: {'Authorization': 'Bearer $_token'}),
     );
     final items = res.data['tracks']['items'] as List;
@@ -58,7 +52,6 @@ class SpotifyService {
     }).toList();
   }
 
-  // Returns original key (0-11) or null if unavailable
   Future<int?> getTrackKey(String spotifyId) async {
     await _ensureToken();
     try {
