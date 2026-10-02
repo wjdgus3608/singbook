@@ -50,7 +50,7 @@ class _SearchScreenState extends State<SearchScreen> {
       final results = await _spotify.search(q);
       if (mounted) setState(() => _results = results);
     } catch (e) {
-      if (mounted) setState(() => _error = '검색 실패: 네트워크를 확인해주세요');
+      if (mounted) setState(() => _error = '검색 실패: $e');
     } finally {
       if (mounted) setState(() => _searching = false);
     }

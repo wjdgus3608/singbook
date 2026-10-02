@@ -93,24 +93,18 @@ class AcrCloudService {
   }
 
   AcrResult? _parse(dynamic data) {
-    try {
-      final status = data['status'];
-      if (status['code'] != 0) return null; // no match
+    final status = data['status'];
+    final code = status['code'] as int;
+    final msg = status['msg'] as String;
+    if (code == 1001) return null; // no match
+    if (code != 0) throw Exception('ACR $code: $msg');
 
-      final music = data['metadata']['music'][0];
-      final title = music['title'] as String;
-      final artist = (music['artists'] as List).first['name'] as String;
+    final musics = data['metadata']?['music'] as List?;
+    if (musics == null || musics.isEmpty) return null;
 
-      String? albumArt;
-      final spotify = music['external_metadata']?['spotify'];
-      if (spotify != null) {
-        // Spotify album art not in ACRCloud response directly;
-        // use track ID for later lookup if needed
-      }
-
-      return AcrResult(title: title, artist: artist, albumArt: albumArt);
-    } catch (_) {
-      return null;
-    }
+    final music = musics[0];
+    final title = music['title'] as String;
+    final artist = (music['artists'] as List).first['name'] as String;
+    return AcrResult(title: title, artist: artist);
   }
 }

@@ -34,6 +34,15 @@ jobs:
           }
           EOF
 
+      - name: Verify api_keys.dart
+        run: |
+          if grep -qE "= '';" lib/config/api_keys.dart; then
+            echo "ERROR: One or more API keys are empty. Check GitHub Secrets."
+            cat lib/config/api_keys.dart
+            exit 1
+          fi
+          echo "api_keys.dart generated successfully"
+
       - name: Install dependencies
         run: flutter pub get
 

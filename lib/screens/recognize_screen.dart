@@ -83,7 +83,7 @@ class _RecognizeScreenState extends State<RecognizeScreen> {
     } catch (e) {
       setState(() {
         _state = _State.error;
-        _errorMsg = '인식 실패: 네트워크를 확인해주세요';
+        _errorMsg = '$e';
       });
     }
   }
