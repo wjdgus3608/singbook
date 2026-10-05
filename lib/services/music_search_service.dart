@@ -16,7 +16,6 @@ class MusicSearchService {
         'term': query,
         'media': 'music',
         'entity': 'song',
-        'country': 'KR',
         'limit': 20,
       },
     );
