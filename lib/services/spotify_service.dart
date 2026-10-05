@@ -18,24 +18,28 @@ class SpotifyService {
     }
     final credentials = base64Encode(
         utf8.encode('${ApiKeys.spotifyClientId}:${ApiKeys.spotifyClientSecret}'));
-    final res = await _dio.post(
-      'https://accounts.spotify.com/api/token',
-      data: 'grant_type=client_credentials',
-      options: Options(headers: {
-        'Authorization': 'Basic $credentials',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      }),
-    );
-    _token = res.data['access_token'] as String;
-    final expiresIn = res.data['expires_in'] as int;
-    _tokenExpiry = DateTime.now().add(Duration(seconds: expiresIn - 60));
+    try {
+      final res = await _dio.post(
+        'https://accounts.spotify.com/api/token',
+        data: 'grant_type=client_credentials',
+        options: Options(headers: {
+          'Authorization': 'Basic $credentials',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        }),
+      );
+      _token = res.data['access_token'] as String;
+      final expiresIn = res.data['expires_in'] as int;
+      _tokenExpiry = DateTime.now().add(Duration(seconds: expiresIn - 60));
+    } on DioException catch (e) {
+      throw Exception('Spotify 인증 실패 ${e.response?.statusCode}: ${e.response?.data}');
+    }
   }
 
   Future<List<Song>> search(String query) async {
     await _ensureToken();
     final res = await _dio.get(
       'https://api.spotify.com/v1/search',
-      queryParameters: {'q': query, 'type': 'track', 'market': 'KR', 'limit': 20},
+      queryParameters: {'q': query, 'type': 'track', 'limit': 20},
       options: Options(headers: {'Authorization': 'Bearer $_token'}),
     );
     final items = res.data['tracks']['items'] as List;

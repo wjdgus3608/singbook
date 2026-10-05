@@ -94,8 +94,9 @@ class AcrCloudService {
 
   AcrResult? _parse(dynamic data) {
     final status = data['status'];
-    final code = status['code'] as int;
-    final msg = status['msg'] as String;
+    final codeRaw = status['code'];
+    final code = codeRaw is int ? codeRaw : int.tryParse(codeRaw.toString()) ?? -1;
+    final msg = status['msg']?.toString() ?? 'unknown';
     if (code == 1001) return null; // no match
     if (code != 0) throw Exception('ACR $code: $msg');
 
