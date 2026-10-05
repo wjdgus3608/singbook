@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../models/song.dart';
 
@@ -19,7 +20,8 @@ class MusicSearchService {
         'limit': 20,
       },
     );
-    final items = res.data['results'] as List;
+    final body = res.data is String ? jsonDecode(res.data as String) : res.data;
+    final items = body['results'] as List;
     return items.map((item) {
       final artwork = (item['artworkUrl100'] as String? ?? '')
           .replaceAll('100x100bb', '600x600bb');

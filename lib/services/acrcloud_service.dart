@@ -81,7 +81,8 @@ class AcrCloudService {
       options: Options(contentType: 'multipart/form-data'),
     );
 
-    return _parse(res.data);
+    final data = res.data is String ? jsonDecode(res.data as String) : res.data;
+    return _parse(data);
   }
 
   String _sign(String stringToSign) {
