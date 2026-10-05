@@ -37,11 +37,12 @@ class _RootScaffold extends StatefulWidget {
 
 class _RootScaffoldState extends State<_RootScaffold> {
   int _tab = 0;
+  final _listKey = GlobalKey<ListScreenState>();
 
-  static const _screens = [
-    ListScreen(),
-    SearchScreen(),
-    RecognizeScreen(),
+  late final _screens = [
+    ListScreen(key: _listKey),
+    const SearchScreen(),
+    const RecognizeScreen(),
   ];
 
   @override
@@ -65,7 +66,10 @@ class _RootScaffoldState extends State<_RootScaffold> {
                   activeIcon: Icons.library_music,
                   label: '내 노래책',
                   active: _tab == 0,
-                  onTap: () => setState(() => _tab = 0),
+                  onTap: () {
+                    setState(() => _tab = 0);
+                    _listKey.currentState?.reload();
+                  },
                 ),
                 _NavItem(
                   icon: Icons.search_outlined,

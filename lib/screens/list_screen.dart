@@ -10,10 +10,10 @@ class ListScreen extends StatefulWidget {
   const ListScreen({super.key});
 
   @override
-  State<ListScreen> createState() => _ListScreenState();
+  State<ListScreen> createState() => ListScreenState();
 }
 
-class _ListScreenState extends State<ListScreen> {
+class ListScreenState extends State<ListScreen> {
   final _db = DatabaseHelper();
   List<Song> _songs = [];
   List<Song> _filtered = [];
@@ -26,6 +26,8 @@ class _ListScreenState extends State<ListScreen> {
     super.initState();
     _load();
   }
+
+  void reload() => _load();
 
   Future<void> _load() async {
     final songs = await _db.getAll();
