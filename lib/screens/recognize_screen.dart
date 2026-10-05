@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../db/database.dart';
 import '../models/song.dart';
 import '../services/acrcloud_service.dart';
-import '../services/spotify_service.dart';
+import '../services/music_search_service.dart';
 import '../theme/app_theme.dart';
 import 'detail_screen.dart';
 
@@ -18,7 +18,7 @@ class RecognizeScreen extends StatefulWidget {
 
 class _RecognizeScreenState extends State<RecognizeScreen> {
   final _acr = AcrCloudService();
-  final _spotify = SpotifyService();
+  final _spotify = MusicSearchService();
   final _db = DatabaseHelper();
 
   _State _state = _State.idle;

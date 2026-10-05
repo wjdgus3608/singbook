@@ -26,8 +26,6 @@ jobs:
         run: |
           cat > lib/config/api_keys.dart << 'EOF'
           class ApiKeys {
-            static const spotifyClientId = '${{ secrets.SPOTIFY_CLIENT_ID }}';
-            static const spotifyClientSecret = '${{ secrets.SPOTIFY_CLIENT_SECRET }}';
             static const acrHost = '${{ secrets.ACR_HOST }}';
             static const acrAccessKey = '${{ secrets.ACR_ACCESS_KEY }}';
             static const acrAccessSecret = '${{ secrets.ACR_ACCESS_SECRET }}';

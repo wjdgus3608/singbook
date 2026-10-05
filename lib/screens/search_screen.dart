@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../db/database.dart';
 import '../models/song.dart';
-import '../services/spotify_service.dart';
+import '../services/music_search_service.dart';
 import '../theme/app_theme.dart';
 import 'detail_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -15,7 +15,7 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final _db = DatabaseHelper();
-  final _spotify = SpotifyService();
+  final _spotify = MusicSearchService();
   final _ctrl = TextEditingController();
   List<Song> _results = [];
   Set<String> _savedIds = {};
