@@ -19,19 +19,38 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'singbook.db'),
-      version: 1,
-      onCreate: (db, _) => db.execute('''
-        CREATE TABLE songs (
-          id TEXT PRIMARY KEY,
-          title TEXT NOT NULL,
-          artist TEXT NOT NULL,
-          album_art TEXT DEFAULT '',
-          key_offset INTEGER DEFAULT 0,
-          memo TEXT DEFAULT '',
-          tags TEXT DEFAULT '[]',
-          updated_at INTEGER NOT NULL
-        )
-      '''),
+      version: 2,
+      onCreate: (db, _) async {
+        await db.execute('''
+          CREATE TABLE songs (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            artist TEXT NOT NULL,
+            album_art TEXT DEFAULT '',
+            key_offset INTEGER DEFAULT 0,
+            memo TEXT DEFAULT '',
+            tags TEXT DEFAULT '[]',
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+        await db.execute('CREATE TABLE tags (name TEXT PRIMARY KEY)');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('CREATE TABLE tags (name TEXT PRIMARY KEY)');
+          // Migrate existing tags from songs into the tags table
+          final rows = await db.query('songs');
+          final names = <String>{};
+          for (final row in rows) {
+            final list = jsonDecode(row['tags'] as String? ?? '[]') as List;
+            names.addAll(list.cast<String>());
+          }
+          for (final name in names) {
+            await db.insert('tags', {'name': name},
+                conflictAlgorithm: ConflictAlgorithm.ignore);
+          }
+        }
+      },
     );
   }
 
@@ -68,10 +87,19 @@ class DatabaseHelper {
     return rows.map(Song.fromMap).toList();
   }
 
-  // Returns tag -> song count map
+  Future<void> addTag(String name) async {
+    await (await db).insert('tags', {'name': name},
+        conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  // Returns tag -> song count map (includes tags with 0 songs)
   Future<Map<String, int>> getAllTags() async {
+    final d = await db;
+    final tagRows = await d.query('tags', orderBy: 'name');
+    final Map<String, int> counts = {
+      for (final r in tagRows) r['name'] as String: 0
+    };
     final songs = await getAll();
-    final Map<String, int> counts = {};
     for (final song in songs) {
       for (final tag in song.tags) {
         counts[tag] = (counts[tag] ?? 0) + 1;
@@ -80,15 +108,18 @@ class DatabaseHelper {
     return counts;
   }
 
-  // Remove a tag from all songs
+  // Remove a tag from the registry and all songs
   Future<void> deleteTag(String tag) async {
-    final songs = await getAll();
     final d = await db;
+    await d.delete('tags', where: 'name = ?', whereArgs: [tag]);
+    final songs = await getAll();
     final batch = d.batch();
     for (final song in songs) {
       if (song.tags.contains(tag)) {
-        final updated = song.copyWith(tags: song.tags.where((t) => t != tag).toList());
-        batch.insert('songs', updated.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+        final updated = song.copyWith(
+            tags: song.tags.where((t) => t != tag).toList());
+        batch.insert('songs', updated.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace);
       }
     }
     await batch.commit(noResult: true);

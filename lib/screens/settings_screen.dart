@@ -63,6 +63,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (name != null && name.isNotEmpty && !_tags.containsKey(name)) {
+      await _db.addTag(name);
       setState(() => _tags[name] = 0);
     }
   }

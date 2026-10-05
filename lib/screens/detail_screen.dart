@@ -18,9 +18,7 @@ class _DetailScreenState extends State<DetailScreen> {
   late int _keyOffset;
   late List<String> _tags;
   late TextEditingController _memoCtrl;
-
-  static const _allTags = ['단골', '고음주의', '쉬움', '어려움'];
-  static const _notes = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  List<String> _availableTags = [];
 
   @override
   void initState() {
@@ -28,6 +26,12 @@ class _DetailScreenState extends State<DetailScreen> {
     _keyOffset = widget.song.keyOffset;
     _tags = List.from(widget.song.tags);
     _memoCtrl = TextEditingController(text: widget.song.memo);
+    _loadAvailableTags();
+  }
+
+  Future<void> _loadAvailableTags() async {
+    final tags = await _db.getAllTags();
+    if (mounted) setState(() => _availableTags = tags.keys.toList());
   }
 
   @override
@@ -170,7 +174,7 @@ class _DetailScreenState extends State<DetailScreen> {
                             spacing: 8,
                             runSpacing: 8,
                             children: [
-                              ..._allTags.map((tag) {
+                              ..._availableTags.map((tag) {
                                 final on = _tags.contains(tag);
                                 return GestureDetector(
                                   onTap: () => setState(() {
