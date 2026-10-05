@@ -59,18 +59,19 @@ class KeyStepper extends StatelessWidget {
                                 blurRadius: 24)
                           ])),
                   const SizedBox(height: 4),
-                  RichText(
-                    text: TextSpan(children: [
-                      TextSpan(
-                          text: _currentNote,
-                          style: AppTheme.mono(
-                              13, FontWeight.normal, AppColors.textDim)),
-                      const TextSpan(
-                          text: ' 장조로 부르기',
-                          style: TextStyle(
-                              fontSize: 13, color: AppColors.textDim)),
-                    ]),
-                  ),
+                  if (origNote.isNotEmpty)
+                    RichText(
+                      text: TextSpan(children: [
+                        TextSpan(
+                            text: _currentNote,
+                            style: AppTheme.mono(
+                                13, FontWeight.normal, AppColors.textDim)),
+                        const TextSpan(
+                            text: ' 장조로 부르기',
+                            style: TextStyle(
+                                fontSize: 13, color: AppColors.textDim)),
+                      ]),
+                    ),
                 ],
               ),
               _StepBtn(

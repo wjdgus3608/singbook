@@ -6,6 +6,7 @@ class Song {
   final String artist;
   final String albumArt;
   int keyOffset;
+  String origKey;
   String memo;
   List<String> tags;
   final int updatedAt;
@@ -16,6 +17,7 @@ class Song {
     required this.artist,
     this.albumArt = '',
     this.keyOffset = 0,
+    this.origKey = '',
     this.memo = '',
     List<String>? tags,
     int? updatedAt,
@@ -28,6 +30,7 @@ class Song {
         'artist': artist,
         'album_art': albumArt,
         'key_offset': keyOffset,
+        'orig_key': origKey,
         'memo': memo,
         'tags': jsonEncode(tags),
         'updated_at': updatedAt,
@@ -39,17 +42,25 @@ class Song {
         artist: m['artist'],
         albumArt: m['album_art'] ?? '',
         keyOffset: m['key_offset'] ?? 0,
+        origKey: m['orig_key'] ?? '',
         memo: m['memo'] ?? '',
         tags: List<String>.from(jsonDecode(m['tags'] ?? '[]')),
         updatedAt: m['updated_at'],
       );
 
-  Song copyWith({int? keyOffset, String? memo, List<String>? tags}) => Song(
+  Song copyWith({
+    int? keyOffset,
+    String? origKey,
+    String? memo,
+    List<String>? tags,
+  }) =>
+      Song(
         id: id,
         title: title,
         artist: artist,
         albumArt: albumArt,
         keyOffset: keyOffset ?? this.keyOffset,
+        origKey: origKey ?? this.origKey,
         memo: memo ?? this.memo,
         tags: tags ?? this.tags,
         updatedAt: DateTime.now().millisecondsSinceEpoch,

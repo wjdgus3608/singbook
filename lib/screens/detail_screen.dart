@@ -16,17 +16,63 @@ class DetailScreen extends StatefulWidget {
 class _DetailScreenState extends State<DetailScreen> {
   final _db = DatabaseHelper();
   late int _keyOffset;
+  late String _origKey;
   late List<String> _tags;
   late TextEditingController _memoCtrl;
   List<String> _availableTags = [];
+
+  static const _noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 
   @override
   void initState() {
     super.initState();
     _keyOffset = widget.song.keyOffset;
+    _origKey = widget.song.origKey;
     _tags = List.from(widget.song.tags);
     _memoCtrl = TextEditingController(text: widget.song.memo);
     _loadAvailableTags();
+  }
+
+  Future<void> _pickOrigKey() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setInner) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('원키 선택',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary)),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  _NoteChip(
+                      label: '미설정',
+                      selected: _origKey.isEmpty,
+                      onTap: () => Navigator.pop(ctx, '')),
+                  ..._noteNames.map((n) => _NoteChip(
+                        label: n,
+                        selected: _origKey == n,
+                        onTap: () => Navigator.pop(ctx, n),
+                      )),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked != null) setState(() => _origKey = picked);
   }
 
   Future<void> _loadAvailableTags() async {
@@ -40,14 +86,10 @@ class _DetailScreenState extends State<DetailScreen> {
     super.dispose();
   }
 
-  String get _origNote {
-    // Spotify key field (0-11) would go here; using stored or default
-    return 'F#';
-  }
-
   Future<void> _save() async {
     final updated = widget.song.copyWith(
       keyOffset: _keyOffset,
+      origKey: _origKey,
       memo: _memoCtrl.text,
       tags: _tags,
     );
@@ -147,16 +189,33 @@ class _DetailScreenState extends State<DetailScreen> {
                                   fontSize: 14,
                                   color: AppColors.textSecondary)),
                           const SizedBox(height: 8),
-                          Text('원키 $_origNote 장조',
-                              style: const TextStyle(
-                                  fontSize: 13, color: AppColors.textMuted)),
+                          GestureDetector(
+                            onTap: _pickOrigKey,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _origKey.isEmpty
+                                      ? '원키 선택'
+                                      : '원키 $_origKey 장조',
+                                  style: const TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.textMuted),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.edit_outlined,
+                                    size: 12, color: AppColors.textMuted),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     // Key stepper
                     KeyStepper(
                       keyOffset: _keyOffset,
-                      origNote: _origNote,
+                      origNote: _origKey,
                       onChanged: (v) => setState(() => _keyOffset = v),
                     ),
                     // Tags
@@ -272,6 +331,36 @@ class _DetailScreenState extends State<DetailScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NoteChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _NoteChip(
+      {required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 56,
+        height: 38,
+        decoration: BoxDecoration(
+          color: selected ? AppColors.accent : AppColors.surface2,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Center(
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? AppColors.bg : AppColors.textPrimary)),
         ),
       ),
     );

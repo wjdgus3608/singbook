@@ -24,7 +24,6 @@ class _RecognizeScreenState extends State<RecognizeScreen> {
   _State _state = _State.idle;
   int _countdown = 10;
   Timer? _timer;
-  AcrResult? _result;
   Song? _song;
   String _errorMsg = '';
 
@@ -76,7 +75,6 @@ class _RecognizeScreenState extends State<RecognizeScreen> {
           );
 
       setState(() {
-        _result = result;
         _song = song;
         _state = _State.result;
       });
@@ -96,7 +94,6 @@ class _RecognizeScreenState extends State<RecognizeScreen> {
 
   void _reset() => setState(() {
         _state = _State.idle;
-        _result = null;
         _song = null;
       });
 

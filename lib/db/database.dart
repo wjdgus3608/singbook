@@ -19,7 +19,7 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'singbook.db'),
-      version: 2,
+      version: 3,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE songs (
@@ -28,17 +28,18 @@ class DatabaseHelper {
             artist TEXT NOT NULL,
             album_art TEXT DEFAULT '',
             key_offset INTEGER DEFAULT 0,
+            orig_key TEXT DEFAULT '',
             memo TEXT DEFAULT '',
             tags TEXT DEFAULT '[]',
             updated_at INTEGER NOT NULL
           )
         ''');
         await db.execute('CREATE TABLE tags (name TEXT PRIMARY KEY)');
+        await _seedDefaultTags(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await db.execute('CREATE TABLE tags (name TEXT PRIMARY KEY)');
-          // Migrate existing tags from songs into the tags table
           final rows = await db.query('songs');
           final names = <String>{};
           for (final row in rows) {
@@ -50,8 +51,21 @@ class DatabaseHelper {
                 conflictAlgorithm: ConflictAlgorithm.ignore);
           }
         }
+        if (oldVersion < 3) {
+          await db.execute(
+              'ALTER TABLE songs ADD COLUMN orig_key TEXT DEFAULT ""');
+          await _seedDefaultTags(db);
+        }
       },
     );
+  }
+
+  static Future<void> _seedDefaultTags(Database db) async {
+    const defaults = ['단골', '고음주의', '쉬움', '어려움'];
+    for (final tag in defaults) {
+      await db.insert('tags', {'name': tag},
+          conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
   }
 
   Future<List<Song>> getAll() async {
@@ -60,7 +74,8 @@ class DatabaseHelper {
   }
 
   Future<Song?> getById(String id) async {
-    final rows = await (await db).query('songs', where: 'id = ?', whereArgs: [id]);
+    final rows =
+        await (await db).query('songs', where: 'id = ?', whereArgs: [id]);
     return rows.isEmpty ? null : Song.fromMap(rows.first);
   }
 
