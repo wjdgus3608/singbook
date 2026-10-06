@@ -45,7 +45,7 @@ class SongCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            _KeyBadge(keyOffset: song.keyOffset),
+            _KeyOffsets(song: song),
           ],
         ),
       ),
@@ -77,47 +77,44 @@ class _AlbumArt extends StatelessWidget {
   }
 }
 
-class _KeyBadge extends StatelessWidget {
-  final int keyOffset;
-  const _KeyBadge({required this.keyOffset});
+class _KeyOffsets extends StatelessWidget {
+  final Song song;
+  const _KeyOffsets({required this.song});
 
   @override
   Widget build(BuildContext context) {
-    final hasKey = keyOffset != 0;
-    final label = keyOffset > 0 ? '+$keyOffset' : '$keyOffset';
-    return Container(
-      width: 52,
-      height: 52,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: hasKey
-            ? AppColors.accent.withOpacity(0.14)
-            : const Color(0xFF1A1A22),
-        border: hasKey
-            ? Border.all(color: AppColors.accent.withOpacity(0.4))
-            : null,
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(label,
-              style: AppTheme.mono(
-                  19,
-                  FontWeight.w800,
-                  hasKey ? AppColors.accent : AppColors.textMuted)),
-          const SizedBox(height: 3),
-          Text(hasKey ? _calcNote() : '원키',
-              style: AppTheme.mono(
-                  10,
-                  FontWeight.normal,
-                  hasKey ? AppColors.accentLight : AppColors.textMuted)),
-        ],
-      ),
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: Song.brands.map((brand) {
+        final offset = song.keyOffsetFor(brand);
+        final label = Song.brandLabels[brand]!;
+        final offsetStr = offset > 0 ? '+$offset' : '$offset';
+        final active = offset != 0;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label,
+                  style: const TextStyle(
+                      fontSize: 10, color: AppColors.textMuted)),
+              const SizedBox(width: 5),
+              SizedBox(
+                width: 28,
+                child: Text(offsetStr,
+                    textAlign: TextAlign.right,
+                    style: AppTheme.mono(
+                        12,
+                        FontWeight.w700,
+                        active
+                            ? AppColors.accent
+                            : AppColors.textMuted)),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
     );
-  }
-
-  String _calcNote() {
-    const notes = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-    return notes[((keyOffset % 12) + 12) % 12];
   }
 }

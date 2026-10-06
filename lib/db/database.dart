@@ -19,7 +19,7 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'singbook.db'),
-      version: 3,
+      version: 4,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE songs (
@@ -28,6 +28,7 @@ class DatabaseHelper {
             artist TEXT NOT NULL,
             album_art TEXT DEFAULT '',
             key_offset INTEGER DEFAULT 0,
+            key_offsets TEXT DEFAULT '{}',
             orig_key TEXT DEFAULT '',
             memo TEXT DEFAULT '',
             tags TEXT DEFAULT '[]',
@@ -55,6 +56,20 @@ class DatabaseHelper {
           await db.execute(
               'ALTER TABLE songs ADD COLUMN orig_key TEXT DEFAULT ""');
           await _seedDefaultTags(db);
+        }
+        if (oldVersion < 4) {
+          await db.execute(
+              'ALTER TABLE songs ADD COLUMN key_offsets TEXT DEFAULT "{}"');
+          // Migrate old key_offset to all brands
+          final rows = await db.query('songs');
+          for (final row in rows) {
+            final old = row['key_offset'] as int? ?? 0;
+            if (old != 0) {
+              final offsets = jsonEncode({'tj': old, 'ky': old, 'other': old});
+              await db.update('songs', {'key_offsets': offsets},
+                  where: 'id = ?', whereArgs: [row['id']]);
+            }
+          }
         }
       },
     );

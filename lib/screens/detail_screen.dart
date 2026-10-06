@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../db/database.dart';
 import '../models/song.dart';
 import '../theme/app_theme.dart';
-import '../widgets/key_stepper.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class DetailScreen extends StatefulWidget {
@@ -15,7 +14,7 @@ class DetailScreen extends StatefulWidget {
 
 class _DetailScreenState extends State<DetailScreen> {
   final _db = DatabaseHelper();
-  late int _keyOffset;
+  late Map<String, int> _keyOffsets;
   late String _origKey;
   late List<String> _tags;
   late TextEditingController _memoCtrl;
@@ -26,58 +25,11 @@ class _DetailScreenState extends State<DetailScreen> {
   @override
   void initState() {
     super.initState();
-    _keyOffset = widget.song.keyOffset;
+    _keyOffsets = Map.from(widget.song.keyOffsets);
     _origKey = widget.song.origKey;
     _tags = List.from(widget.song.tags);
     _memoCtrl = TextEditingController(text: widget.song.memo);
     _loadAvailableTags();
-  }
-
-  Future<void> _pickOrigKey() async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setInner) => Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('원키 선택',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary)),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                alignment: WrapAlignment.center,
-                children: [
-                  _NoteChip(
-                      label: '미설정',
-                      selected: _origKey.isEmpty,
-                      onTap: () => Navigator.pop(ctx, '')),
-                  ..._noteNames.map((n) => _NoteChip(
-                        label: n,
-                        selected: _origKey == n,
-                        onTap: () => Navigator.pop(ctx, n),
-                      )),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (picked != null) setState(() => _origKey = picked);
-  }
-
-  Future<void> _loadAvailableTags() async {
-    final tags = await _db.getAllTags();
-    if (mounted) setState(() => _availableTags = tags.keys.toList());
   }
 
   @override
@@ -86,9 +38,54 @@ class _DetailScreenState extends State<DetailScreen> {
     super.dispose();
   }
 
+  Future<void> _loadAvailableTags() async {
+    final tags = await _db.getAllTags();
+    if (mounted) setState(() => _availableTags = tags.keys.toList());
+  }
+
+  Future<void> _pickOrigKey() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('원키 선택',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary)),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                _NoteChip(
+                    label: '미설정',
+                    selected: _origKey.isEmpty,
+                    onTap: () => Navigator.pop(context, '')),
+                ..._noteNames.map((n) => _NoteChip(
+                      label: n,
+                      selected: _origKey == n,
+                      onTap: () => Navigator.pop(context, n),
+                    )),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) setState(() => _origKey = picked);
+  }
+
   Future<void> _save() async {
     final updated = widget.song.copyWith(
-      keyOffset: _keyOffset,
+      keyOffsets: _keyOffsets,
       origKey: _origKey,
       memo: _memoCtrl.text,
       tags: _tags,
@@ -130,7 +127,6 @@ class _DetailScreenState extends State<DetailScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
               child: Row(
@@ -212,11 +208,32 @@ class _DetailScreenState extends State<DetailScreen> {
                         ],
                       ),
                     ),
-                    // Key stepper
-                    KeyStepper(
-                      keyOffset: _keyOffset,
-                      origNote: _origKey,
-                      onChanged: (v) => setState(() => _keyOffset = v),
+                    // Per-brand key rows
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('내 키',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.textSecondary)),
+                            const SizedBox(height: 12),
+                            ...Song.brands.map((brand) => _BrandRow(
+                                  label: Song.brandLabels[brand]!,
+                                  value: _keyOffsets[brand] ?? 0,
+                                  onChanged: (v) =>
+                                      setState(() => _keyOffsets[brand] = v),
+                                )),
+                          ],
+                        ),
+                      ),
                     ),
                     // Tags
                     Padding(
@@ -232,42 +249,39 @@ class _DetailScreenState extends State<DetailScreen> {
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children: [
-                              ..._availableTags.map((tag) {
-                                final on = _tags.contains(tag);
-                                return GestureDetector(
-                                  onTap: () => setState(() {
-                                    on ? _tags.remove(tag) : _tags.add(tag);
-                                  }),
-                                  child: Container(
-                                    height: 32,
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12),
-                                    decoration: BoxDecoration(
-                                      color: on
-                                          ? AppColors.accent
-                                          : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: on
-                                          ? null
-                                          : Border.all(
-                                              color: AppColors.border2),
-                                    ),
-                                    child: Center(
-                                      child: Text(tag,
-                                          style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: on
-                                                  ? FontWeight.w700
-                                                  : FontWeight.normal,
-                                              color: on
-                                                  ? AppColors.bg
-                                                  : AppColors.textDim)),
-                                    ),
+                            children: _availableTags.map((tag) {
+                              final on = _tags.contains(tag);
+                              return GestureDetector(
+                                onTap: () => setState(() {
+                                  on ? _tags.remove(tag) : _tags.add(tag);
+                                }),
+                                child: Container(
+                                  height: 32,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: on
+                                        ? AppColors.accent
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: on
+                                        ? null
+                                        : Border.all(color: AppColors.border2),
                                   ),
-                                );
-                              }),
-                            ],
+                                  child: Center(
+                                    child: Text(tag,
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: on
+                                                ? FontWeight.w700
+                                                : FontWeight.normal,
+                                            color: on
+                                                ? AppColors.bg
+                                                : AppColors.textDim)),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
                           ),
                         ],
                       ),
@@ -310,7 +324,6 @@ class _DetailScreenState extends State<DetailScreen> {
                 ),
               ),
             ),
-            // Save button
             Padding(
               padding: const EdgeInsets.all(16),
               child: SizedBox(
@@ -332,6 +345,81 @@ class _DetailScreenState extends State<DetailScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _BrandRow extends StatelessWidget {
+  final String label;
+  final int value;
+  final ValueChanged<int> onChanged;
+  const _BrandRow(
+      {required this.label, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final active = value != 0;
+    final valueStr = value > 0 ? '+$value' : '$value';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 36,
+            child: Text(label,
+                style: const TextStyle(
+                    fontSize: 14, color: AppColors.textSecondary)),
+          ),
+          const Spacer(),
+          _Btn(
+            icon: Icons.remove,
+            enabled: value > -7,
+            onTap: () => onChanged(value - 1),
+          ),
+          SizedBox(
+            width: 64,
+            child: Center(
+              child: Text(valueStr,
+                  style: AppTheme.mono(
+                      24,
+                      FontWeight.w800,
+                      active ? AppColors.accent : AppColors.textMuted)),
+            ),
+          ),
+          _Btn(
+            icon: Icons.add,
+            enabled: value < 7,
+            onTap: () => onChanged(value + 1),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Btn extends StatelessWidget {
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _Btn({required this.icon, required this.enabled, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: enabled
+              ? const Color(0xFF1F1F28)
+              : const Color(0xFF1F1F28).withOpacity(0.4),
+        ),
+        child: Icon(icon,
+            color: enabled ? AppColors.textPrimary : AppColors.textMuted,
+            size: 22),
       ),
     );
   }
