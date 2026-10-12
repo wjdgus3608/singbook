@@ -492,13 +492,27 @@ class _SongRangeSection extends StatefulWidget {
   State<_SongRangeSection> createState() => _SongRangeSectionState();
 }
 
-class _SongRangeSectionState extends State<_SongRangeSection> {
+class _SongRangeSectionState extends State<_SongRangeSection>
+    with WidgetsBindingObserver {
   final _pitch = PitchService();
   bool _measuring = false;
   String _currentNote = '';
   String _sessionLow = '';
   String _sessionHigh = '';
   StreamSubscription<double?>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused && _measuring) {
+      _stop(save: false);
+    }
+  }
 
   Future<void> _start() async {
     final ok = await _pitch.hasPermission();
@@ -544,6 +558,7 @@ class _SongRangeSectionState extends State<_SongRangeSection> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sub?.cancel();
     _pitch.stop();
     super.dispose();

@@ -16,7 +16,8 @@ class RecognizeScreen extends StatefulWidget {
   State<RecognizeScreen> createState() => _RecognizeScreenState();
 }
 
-class _RecognizeScreenState extends State<RecognizeScreen> {
+class _RecognizeScreenState extends State<RecognizeScreen>
+    with WidgetsBindingObserver {
   final _acr = AcrCloudService();
   final _spotify = MusicSearchService();
   final _db = DatabaseHelper();
@@ -26,6 +27,20 @@ class _RecognizeScreenState extends State<RecognizeScreen> {
   Timer? _timer;
   Song? _song;
   String _errorMsg = '';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused &&
+        _state == _State.recording) {
+      _cancel();
+    }
+  }
 
   void _startRecording() async {
     final hasPermission = await _acr.hasPermission();
@@ -111,6 +126,7 @@ class _RecognizeScreenState extends State<RecognizeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
   }

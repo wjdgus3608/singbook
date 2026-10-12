@@ -13,7 +13,7 @@ class RangeScreen extends StatefulWidget {
   State<RangeScreen> createState() => _RangeScreenState();
 }
 
-class _RangeScreenState extends State<RangeScreen> {
+class _RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
   final _db = DatabaseHelper();
   final _pitch = PitchService();
 
@@ -31,7 +31,15 @@ class _RangeScreenState extends State<RangeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused && _measuring) {
+      _cancelMeasuring();
+    }
   }
 
   Future<void> _load() async {
@@ -175,6 +183,7 @@ class _RangeScreenState extends State<RangeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sub?.cancel();
     _pitch.stop();
     super.dispose();
