@@ -108,6 +108,11 @@ class PitchService {
     return (l < 0 || h < 0) ? 0 : h - l;
   }
 
+  static String midiToNote(int midi) {
+    if (midi < 0 || midi > 127) return '';
+    return '${_names[midi % 12]}${(midi ~/ 12) - 1}';
+  }
+
   // song range와 user range 비교: 'fit' / 'partial' / 'over'
   static String fitStatus(
       String sLow, String sHigh, String uLow, String uHigh) {

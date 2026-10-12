@@ -182,27 +182,21 @@ class DatabaseHelper {
 
   // ── User vocal range ───────────────────────────────────────────────────────
 
-  Future<void> saveUserRange(String low, String high) async {
-    await (await db).insert(
-      'user_vocal_range',
-      {
-        'id': 1,
-        'low_note': low,
-        'high_note': high,
-        'measured_at': DateTime.now().millisecondsSinceEpoch,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+  Future<void> addUserRangeRecord(String low, String high) async {
+    await (await db).insert('user_vocal_range', {
+      'low_note': low,
+      'high_note': high,
+      'measured_at': DateTime.now().millisecondsSinceEpoch,
+    });
   }
 
-  Future<Map<String, String>?> getUserRange() async {
-    final rows = await (await db)
-        .query('user_vocal_range', where: 'id = ?', whereArgs: [1]);
-    if (rows.isEmpty) return null;
-    return {
-      'low': rows.first['low_note'] as String,
-      'high': rows.first['high_note'] as String,
-    };
+  Future<List<Map<String, dynamic>>> getUserRangeRecords() async {
+    return (await db).query('user_vocal_range', orderBy: 'measured_at DESC');
+  }
+
+  Future<void> deleteUserRangeRecord(int id) async {
+    await (await db)
+        .delete('user_vocal_range', where: 'id = ?', whereArgs: [id]);
   }
 
   // ── Misc ───────────────────────────────────────────────────────────────────

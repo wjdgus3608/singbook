@@ -39,7 +39,7 @@ class AcrCloudService {
     final dir = await getTemporaryDirectory();
     _recordPath = '${dir.path}/acr_sample.wav';
     await _recorder.start(
-      const RecordConfig(encoder: AudioEncoder.wav, sampleRate: 8000),
+      const RecordConfig(encoder: AudioEncoder.wav, sampleRate: 16000),
       path: _recordPath!,
     );
   }
