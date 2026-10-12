@@ -1156,76 +1156,75 @@ class _SongKeyMapState extends State<_SongKeyMap> {
                         fontSize: 13, color: AppColors.textMuted)),
               ),
             ),
-          ...withKey.map((song) {
-            final offset = song.keyOffsetFor(_brand);
-            final midi =
-                PitchService.origKeyToMidi(song.origKey, offset);
-            final color = _dotColor(midi);
-            final keyLabel =
-                '${song.origKey}${offset == 0 ? '' : (offset > 0 ? '+$offset' : '$offset')}';
-            return LayoutBuilder(builder: (_, constraints) {
-              final w = constraints.maxWidth;
-              final dotX = _frac(midi.clamp(_vizMin, _vizMax)) * w;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  children: [
-                    // 곡 이름 (고정 너비)
-                    SizedBox(
-                      width: 100,
-                      child: Text(song.title,
-                          style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                    // 축 위 점
-                    Expanded(
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          SizedBox(
-                            height: 20,
-                            child: Stack(
-                              children: [
-                                Positioned(
-                                  left: dotX - 6,
-                                  top: 2,
-                                  child: Container(
-                                    width: 12,
-                                    height: 12,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: color,
-                                      boxShadow: [
-                                        BoxShadow(
-                                            color:
-                                                color.withOpacity(0.5),
-                                            blurRadius: 6),
-                                      ],
-                                    ),
+          if (withKey.isNotEmpty)
+            LayoutBuilder(builder: (_, constraints) {
+              const nameW = 96.0;
+              const labelW = 48.0;
+              const gap = 8.0;
+              final axisW = constraints.maxWidth - nameW - labelW - gap * 2;
+              return Column(
+                children: withKey.map((song) {
+                  final offset = song.keyOffsetFor(_brand);
+                  final midi = PitchService.origKeyToMidi(song.origKey, offset);
+                  final color = _dotColor(midi);
+                  final keyLabel =
+                      '${song.origKey}${offset == 0 ? '' : (offset > 0 ? '+$offset' : '$offset')}';
+                  final dotX =
+                      _frac(midi.clamp(_vizMin, _vizMax)) * axisW;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: nameW,
+                          child: Text(song.title,
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        const SizedBox(width: gap),
+                        SizedBox(
+                          width: axisW,
+                          height: 20,
+                          child: Stack(
+                            children: [
+                              // Stack이 SizedBox 전체를 채우게 함
+                              const Positioned.fill(child: SizedBox()),
+                              Positioned(
+                                left: (dotX - 6).clamp(0.0, axisW - 12),
+                                top: 4,
+                                child: Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: color,
+                                    boxShadow: [
+                                      BoxShadow(
+                                          color: color.withOpacity(0.5),
+                                          blurRadius: 6),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: gap),
+                        SizedBox(
+                          width: labelW,
+                          child: Text(keyLabel,
+                              style: AppTheme.mono(11, FontWeight.w600, color),
+                              textAlign: TextAlign.right),
+                        ),
+                      ],
                     ),
-                    // 키 레이블
-                    SizedBox(
-                      width: 48,
-                      child: Text(keyLabel,
-                          style: AppTheme.mono(
-                              11, FontWeight.w600, color),
-                          textAlign: TextAlign.right),
-                    ),
-                  ],
-                ),
+                  );
+                }).toList(),
               );
-            });
-          }),
+            }),
           // 원키 미입력 구분선 + 목록
           if (noKey.isNotEmpty) ...[
             const SizedBox(height: 8),
