@@ -136,6 +136,14 @@ class PitchService {
     return '$span반음 ($octStr옥타브)';
   }
 
+  // origKey ("F#") + offset → MIDI (C4=60 기준)
+  static int origKeyToMidi(String key, int offset) {
+    if (key.isEmpty) return -1;
+    final idx = _names.indexOf(key);
+    if (idx < 0) return -1;
+    return 60 + idx + offset; // C4=60
+  }
+
   // song range와 user range 비교: 'fit' / 'partial' / 'over'
   static String fitStatus(
       String sLow, String sHigh, String uLow, String uHigh) {

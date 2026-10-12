@@ -22,7 +22,7 @@ class _RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
   List<Map<String, dynamic>> _records = [];
   String _overallLow = '';
   String _overallHigh = '';
-  List<Song> _songsWithRange = [];
+  List<Song> _songs = [];
 
   _MeasurePhase _phase = _MeasurePhase.idle;
   String _currentNote = '';
@@ -54,7 +54,7 @@ class _RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
     if (!mounted) return;
     setState(() {
       _records = records;
-      _songsWithRange = songs.where((s) => s.hasRange).toList();
+      _songs = songs;
       _computeOverall();
     });
   }
@@ -199,11 +199,10 @@ class _RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
                       onSave: _saveResult,
                       onRemeasure: _startMeasuring,
                     ),
-                    if (_songsWithRange.isNotEmpty &&
-                        _overallLow.isNotEmpty) ...[
+                    if (_songs.isNotEmpty) ...[
                       const SizedBox(height: 20),
-                      _SongCompareList(
-                        songs: _songsWithRange,
+                      _SongKeyMap(
+                        songs: _songs,
                         myLow: _overallLow,
                         myHigh: _overallHigh,
                       ),
@@ -973,170 +972,313 @@ class _DayGroup extends StatelessWidget {
   }
 }
 
-// ── 곡 음역 비교 ──────────────────────────────────────────────────────────────
+// ── 곡 키 위치 맵 ─────────────────────────────────────────────────────────────
 
-class _SongCompareList extends StatelessWidget {
+class _SongKeyMap extends StatefulWidget {
   final List<Song> songs;
   final String myLow;
   final String myHigh;
-  const _SongCompareList(
+  const _SongKeyMap(
       {required this.songs, required this.myLow, required this.myHigh});
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('내 곡 음역 비교',
-            style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary)),
-        const SizedBox(height: 10),
-        ...songs.map((song) => _SongRangeRow(
-              song: song,
-              myLow: myLow,
-              myHigh: myHigh,
-            )),
-      ],
-    );
-  }
+  State<_SongKeyMap> createState() => _SongKeyMapState();
 }
 
-class _SongRangeRow extends StatelessWidget {
-  final Song song;
-  final String myLow;
-  final String myHigh;
-  const _SongRangeRow(
-      {required this.song, required this.myLow, required this.myHigh});
+class _SongKeyMapState extends State<_SongKeyMap> {
+  String _brand = 'tj';
+
+  static const _vizMin = 36; // C2
+  static const _vizMax = 84; // C6
+  static const _vizSpan = _vizMax - _vizMin;
+  static const _octaveLabels = ['C2', 'C3', 'C4', 'C5', 'C6'];
+  static const _octaveMidi = [36, 48, 60, 72, 84];
+
+  double _frac(int midi) =>
+      ((midi - _vizMin) / _vizSpan).clamp(0.0, 1.0);
+
+  Color _dotColor(int midi) {
+    if (widget.myLow.isEmpty || widget.myHigh.isEmpty) {
+      return AppColors.textMuted;
+    }
+    final lo = PitchService.noteToMidi(widget.myLow);
+    final hi = PitchService.noteToMidi(widget.myHigh);
+    if (midi >= lo && midi <= hi) return AppColors.accent;
+    if ((midi - lo).abs() <= 3 || (midi - hi).abs() <= 3) {
+      return const Color(0xFFFFCC44);
+    }
+    return AppColors.danger;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final status =
-        PitchService.fitStatus(song.lowNote, song.highNote, myLow, myHigh);
-    final (icon, color, label) = switch (status) {
-      'fit' => (Icons.check_circle_outline, AppColors.accent, '맞음'),
-      'partial' => (
-          Icons.warning_amber_outlined,
-          const Color(0xFFFFCC44),
-          '일부 초과'
-        ),
-      _ => (Icons.cancel_outlined, AppColors.danger, '범위 초과'),
-    };
+    final withKey = widget.songs
+        .where((s) => s.origKey.isNotEmpty)
+        .toList();
+    final noKey = widget.songs
+        .where((s) => s.origKey.isEmpty)
+        .toList();
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // 헤더 + 브랜드 선택
+          Row(
+            children: [
+              const Text('내 곡 키 위치',
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary)),
+              const Spacer(),
+              ...Song.brands.map((b) {
+                final selected = _brand == b;
+                return GestureDetector(
+                  onTap: () => setState(() => _brand = b),
+                  child: Container(
+                    margin: const EdgeInsets.only(left: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? AppColors.accent
+                          : AppColors.surface2,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(Song.brandLabels[b]!,
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: selected
+                                ? AppColors.bg
+                                : AppColors.textMuted)),
+                  ),
+                );
+              }),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // 공유 축 헤더
+          LayoutBuilder(builder: (_, constraints) {
+            final w = constraints.maxWidth;
+            return Column(
               children: [
-                Text(song.title,
-                    style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                SizedBox(
+                  height: 28,
+                  child: Stack(
+                    children: [
+                      // 배경
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.surface2,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                      ),
+                      // 옥타브 경계선
+                      for (final m in [48, 60, 72])
+                        Positioned(
+                          left: _frac(m) * w - 0.5,
+                          top: 0,
+                          bottom: 0,
+                          width: 1,
+                          child:
+                              Container(color: AppColors.border),
+                        ),
+                      // 내 음역대 배경
+                      if (widget.myLow.isNotEmpty &&
+                          widget.myHigh.isNotEmpty)
+                        Positioned(
+                          left: _frac(PitchService.noteToMidi(widget.myLow)
+                                  .clamp(_vizMin, _vizMax)) *
+                              w,
+                          width: max(
+                            4.0,
+                            _frac(PitchService.noteToMidi(widget.myHigh)
+                                    .clamp(_vizMin, _vizMax)) *
+                                    w -
+                                _frac(PitchService.noteToMidi(widget.myLow)
+                                        .clamp(_vizMin, _vizMax)) *
+                                    w,
+                          ),
+                          top: 0,
+                          bottom: 0,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: AppColors.accent.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text('${song.lowNote} ~ ${song.highNote}',
-                    style: AppTheme.mono(
-                        11, FontWeight.w500, AppColors.textSecondary)),
-                const SizedBox(height: 6),
-                _SongCompareBar(
-                  songLow: song.lowNote,
-                  songHigh: song.highNote,
-                  myLow: myLow,
-                  myHigh: myHigh,
+                // 축 레이블
+                Row(
+                  children: List.generate(_octaveMidi.length, (i) {
+                    return Expanded(
+                      flex: i < _octaveMidi.length - 1
+                          ? ((_octaveMidi[i + 1] - _octaveMidi[i]) * 100)
+                              .round()
+                          : 1,
+                      child: Align(
+                        alignment: i == _octaveMidi.length - 1
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
+                        child: Text(_octaveLabels[i],
+                            style: const TextStyle(
+                                fontSize: 9,
+                                color: AppColors.textMuted)),
+                      ),
+                    );
+                  }),
+                ),
+              ],
+            );
+          }),
+          const SizedBox(height: 10),
+          // 원키 있는 곡들
+          if (withKey.isEmpty && noKey.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Center(
+                child: Text('등록된 곡이 없어요',
+                    style: TextStyle(
+                        fontSize: 13, color: AppColors.textMuted)),
+              ),
+            ),
+          ...withKey.map((song) {
+            final offset = song.keyOffsetFor(_brand);
+            final midi =
+                PitchService.origKeyToMidi(song.origKey, offset);
+            final color = _dotColor(midi);
+            final keyLabel =
+                '${song.origKey}${offset == 0 ? '' : (offset > 0 ? '+$offset' : '$offset')}';
+            return LayoutBuilder(builder: (_, constraints) {
+              final w = constraints.maxWidth;
+              final dotX = _frac(midi.clamp(_vizMin, _vizMax)) * w;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    // 곡 이름 (고정 너비)
+                    SizedBox(
+                      width: 100,
+                      child: Text(song.title,
+                          style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    // 축 위 점
+                    Expanded(
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          SizedBox(
+                            height: 20,
+                            child: Stack(
+                              children: [
+                                Positioned(
+                                  left: dotX - 6,
+                                  top: 2,
+                                  child: Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: color,
+                                      boxShadow: [
+                                        BoxShadow(
+                                            color:
+                                                color.withOpacity(0.5),
+                                            blurRadius: 6),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // 키 레이블
+                    SizedBox(
+                      width: 48,
+                      child: Text(keyLabel,
+                          style: AppTheme.mono(
+                              11, FontWeight.w600, color),
+                          textAlign: TextAlign.right),
+                    ),
+                  ],
+                ),
+              );
+            });
+          }),
+          // 원키 미입력 구분선 + 목록
+          if (noKey.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 1,
+                    color: AppColors.border,
+                    margin: const EdgeInsets.only(right: 8),
+                  ),
+                ),
+                const Text('원키 미입력',
+                    style: TextStyle(
+                        fontSize: 11, color: AppColors.textMuted)),
+                Expanded(
+                  child: Container(
+                    height: 1,
+                    color: AppColors.border,
+                    margin: const EdgeInsets.only(left: 8),
+                  ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(height: 2),
-              Text(label, style: TextStyle(fontSize: 10, color: color)),
-            ],
-          ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: noKey.map((song) {
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('◌',
+                        style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.textMuted)),
+                    const SizedBox(width: 4),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 120),
+                      child: Text(song.title,
+                          style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textMuted),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ),
+          ],
         ],
       ),
     );
-  }
-}
-
-class _SongCompareBar extends StatelessWidget {
-  final String songLow;
-  final String songHigh;
-  final String myLow;
-  final String myHigh;
-  const _SongCompareBar(
-      {required this.songLow,
-      required this.songHigh,
-      required this.myLow,
-      required this.myHigh});
-
-  static const _vizMin = 36;
-  static const _vizMax = 84;
-  static const _vizSpan = _vizMax - _vizMin;
-
-  double _f(int midi) => ((midi - _vizMin) / _vizSpan).clamp(0.0, 1.0);
-
-  @override
-  Widget build(BuildContext context) {
-    final sl = PitchService.noteToMidi(songLow).clamp(_vizMin, _vizMax);
-    final sh = PitchService.noteToMidi(songHigh).clamp(_vizMin, _vizMax);
-    final ul = PitchService.noteToMidi(myLow).clamp(_vizMin, _vizMax);
-    final uh = PitchService.noteToMidi(myHigh).clamp(_vizMin, _vizMax);
-
-    return LayoutBuilder(builder: (_, c) {
-      final w = c.maxWidth;
-      return SizedBox(
-        height: 16,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.surface2,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-            ),
-            Positioned(
-              left: _f(ul) * w,
-              width: max(2.0, _f(uh) * w - _f(ul) * w),
-              top: 0,
-              bottom: 0,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withOpacity(0.25),
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-            ),
-            Positioned(
-              left: _f(sl) * w,
-              width: max(2.0, _f(sh) * w - _f(sl) * w),
-              top: 3,
-              bottom: 3,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.textDim.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    });
   }
 }

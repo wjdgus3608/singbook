@@ -1,8 +1,6 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import '../db/database.dart';
 import '../models/song.dart';
-import '../services/pitch_service.dart';
 import '../theme/app_theme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -18,8 +16,6 @@ class _DetailScreenState extends State<DetailScreen> {
   final _db = DatabaseHelper();
   late Map<String, int> _keyOffsets;
   late String _origKey;
-  late String _lowNote;
-  late String _highNote;
   late List<String> _tags;
   late TextEditingController _memoCtrl;
   List<String> _availableTags = [];
@@ -31,8 +27,6 @@ class _DetailScreenState extends State<DetailScreen> {
     super.initState();
     _keyOffsets = Map.from(widget.song.keyOffsets);
     _origKey = widget.song.origKey;
-    _lowNote = widget.song.lowNote;
-    _highNote = widget.song.highNote;
     _tags = List.from(widget.song.tags);
     _memoCtrl = TextEditingController(text: widget.song.memo);
     _loadAvailableTags();
@@ -93,8 +87,6 @@ class _DetailScreenState extends State<DetailScreen> {
     final updated = widget.song.copyWith(
       keyOffsets: _keyOffsets,
       origKey: _origKey,
-      lowNote: _lowNote,
-      highNote: _highNote,
       memo: _memoCtrl.text,
       tags: _tags,
     );
@@ -241,19 +233,6 @@ class _DetailScreenState extends State<DetailScreen> {
                                 )),
                           ],
                         ),
-                      ),
-                    ),
-                    // Song range
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                      child: _SongRangeSection(
-                        lowNote: _lowNote,
-                        highNote: _highNote,
-                        onMeasured: (low, high) =>
-                            setState(() {
-                              _lowNote = low;
-                              _highNote = high;
-                            }),
                       ),
                     ),
                     // Tags
@@ -476,215 +455,3 @@ class _NoteChip extends StatelessWidget {
   }
 }
 
-// ── 곡 음역대 섹션 ────────────────────────────────────────────────────────────
-
-class _SongRangeSection extends StatefulWidget {
-  final String lowNote;
-  final String highNote;
-  final void Function(String low, String high) onMeasured;
-  const _SongRangeSection({
-    required this.lowNote,
-    required this.highNote,
-    required this.onMeasured,
-  });
-
-  @override
-  State<_SongRangeSection> createState() => _SongRangeSectionState();
-}
-
-class _SongRangeSectionState extends State<_SongRangeSection>
-    with WidgetsBindingObserver {
-  final _pitch = PitchService();
-  bool _measuring = false;
-  String _currentNote = '';
-  String _sessionLow = '';
-  String _sessionHigh = '';
-  StreamSubscription<double?>? _sub;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused && _measuring) {
-      _stop(save: false);
-    }
-  }
-
-  Future<void> _start() async {
-    final ok = await _pitch.hasPermission();
-    if (!ok) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('마이크 권한이 필요해요')),
-        );
-      }
-      return;
-    }
-    setState(() {
-      _measuring = true;
-      _currentNote = '';
-      _sessionLow = '';
-      _sessionHigh = '';
-    });
-    final stream = await _pitch.start();
-    _sub = stream.listen((hz) {
-      if (hz == null) return;
-      final note = PitchService.hzToNote(hz);
-      if (note.isEmpty) return;
-      final midi = PitchService.noteToMidi(note);
-      setState(() {
-        _currentNote = note;
-        if (_sessionLow.isEmpty ||
-            midi < PitchService.noteToMidi(_sessionLow)) _sessionLow = note;
-        if (_sessionHigh.isEmpty ||
-            midi > PitchService.noteToMidi(_sessionHigh)) _sessionHigh = note;
-      });
-    });
-  }
-
-  Future<void> _stop({bool save = true}) async {
-    await _sub?.cancel();
-    _sub = null;
-    await _pitch.stop();
-    if (save && _sessionLow.isNotEmpty && _sessionHigh.isNotEmpty) {
-      widget.onMeasured(_sessionLow, _sessionHigh);
-    }
-    if (mounted) setState(() => _measuring = false);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _sub?.cancel();
-    _pitch.stop();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hasRange =
-        widget.lowNote.isNotEmpty && widget.highNote.isNotEmpty;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Text('곡 음역대',
-                  style: TextStyle(
-                      fontSize: 13, color: AppColors.textSecondary)),
-              const Spacer(),
-              if (hasRange && !_measuring)
-                Text('${widget.lowNote} ~ ${widget.highNote}',
-                    style: AppTheme.mono(
-                        13, FontWeight.w600, AppColors.accent)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (_measuring) ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.accent.withOpacity(0.12),
-                    border: Border.all(
-                        color: AppColors.accent.withOpacity(0.4), width: 2),
-                  ),
-                  child: Center(
-                    child: Text(
-                      _currentNote.isEmpty ? '–' : _currentNote,
-                      style: AppTheme.mono(
-                          24, FontWeight.w900, AppColors.accent),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 20),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _sessionLow.isEmpty ? '–' : _sessionLow,
-                      style: AppTheme.mono(
-                          14,
-                          FontWeight.w600,
-                          const Color(0xFF6BB5FF)),
-                    ),
-                    const Text('최저음',
-                        style: TextStyle(
-                            fontSize: 10, color: AppColors.textMuted)),
-                    const SizedBox(height: 8),
-                    Text(
-                      _sessionHigh.isEmpty ? '–' : _sessionHigh,
-                      style: AppTheme.mono(
-                          14, FontWeight.w600, AppColors.accent),
-                    ),
-                    const Text('최고음',
-                        style: TextStyle(
-                            fontSize: 10, color: AppColors.textMuted)),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                TextButton(
-                  onPressed: () => _stop(save: false),
-                  child: const Text('취소',
-                      style: TextStyle(color: AppColors.textMuted)),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: (_sessionLow.isNotEmpty)
-                      ? () => _stop(save: true)
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    foregroundColor: AppColors.bg,
-                    disabledBackgroundColor: AppColors.surface2,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 10),
-                  ),
-                  child: const Text('완료',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
-              ],
-            ),
-          ] else ...[
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _start,
-                icon: const Icon(Icons.mic_outlined, size: 16),
-                label: Text(hasRange ? '다시 측정' : '이 곡 음역대 측정'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.textSecondary,
-                  side: const BorderSide(color: AppColors.border2),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
