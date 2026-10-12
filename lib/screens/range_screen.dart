@@ -12,10 +12,11 @@ class RangeScreen extends StatefulWidget {
   const RangeScreen({super.key});
 
   @override
-  State<RangeScreen> createState() => _RangeScreenState();
+  State<RangeScreen> createState() => RangeScreenState();
 }
 
-class _RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
+class RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
+  void reload() => _load();
   final _db = DatabaseHelper();
   final _pitch = PitchService();
 

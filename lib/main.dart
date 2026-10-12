@@ -39,12 +39,13 @@ class _RootScaffold extends StatefulWidget {
 class _RootScaffoldState extends State<_RootScaffold> {
   int _tab = 0;
   final _listKey = GlobalKey<ListScreenState>();
+  final _rangeKey = GlobalKey<RangeScreenState>();
 
   late final _screens = [
     ListScreen(key: _listKey),
     const SearchScreen(),
     const RecognizeScreen(),
-    const RangeScreen(),
+    RangeScreen(key: _rangeKey),
   ];
 
   @override
@@ -92,7 +93,10 @@ class _RootScaffoldState extends State<_RootScaffold> {
                   activeIcon: Icons.graphic_eq,
                   label: '음역대',
                   active: _tab == 3,
-                  onTap: () => setState(() => _tab = 3),
+                  onTap: () {
+                    setState(() => _tab = 3);
+                    _rangeKey.currentState?.reload();
+                  },
                 ),
               ],
             ),
