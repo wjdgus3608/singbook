@@ -7,6 +7,8 @@ class Song {
   final String albumArt;
   Map<String, int> keyOffsets; // {'tj': 0, 'ky': 0, 'other': 0}
   String origKey;
+  String lowNote;  // e.g. 'C3'
+  String highNote; // e.g. 'G4'
   String memo;
   List<String> tags;
   final int updatedAt;
@@ -21,12 +23,16 @@ class Song {
     this.albumArt = '',
     Map<String, int>? keyOffsets,
     this.origKey = '',
+    this.lowNote = '',
+    this.highNote = '',
     this.memo = '',
     List<String>? tags,
     int? updatedAt,
   })  : keyOffsets = keyOffsets ?? {},
         tags = tags ?? [],
         updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
+
+  bool get hasRange => lowNote.isNotEmpty && highNote.isNotEmpty;
 
   int keyOffsetFor(String brand) => keyOffsets[brand] ?? 0;
   bool get hasAnyOffset => brands.any((b) => keyOffsetFor(b) != 0);
@@ -38,6 +44,8 @@ class Song {
         'album_art': albumArt,
         'key_offsets': jsonEncode(keyOffsets),
         'orig_key': origKey,
+        'low_note': lowNote,
+        'high_note': highNote,
         'memo': memo,
         'tags': jsonEncode(tags),
         'updated_at': updatedAt,
@@ -50,6 +58,8 @@ class Song {
         albumArt: m['album_art'] ?? '',
         keyOffsets: _parseKeyOffsets(m),
         origKey: m['orig_key'] ?? '',
+        lowNote: m['low_note'] ?? '',
+        highNote: m['high_note'] ?? '',
         memo: m['memo'] ?? '',
         tags: List<String>.from(jsonDecode(m['tags'] ?? '[]')),
         updatedAt: m['updated_at'],
@@ -63,17 +73,16 @@ class Song {
         return decoded.map((k, v) => MapEntry(k, v as int));
       }
     } catch (_) {}
-    // Legacy fallback: migrate old key_offset to all brands
     final legacy = m['key_offset'] as int? ?? 0;
-    if (legacy != 0) {
-      return {'tj': legacy, 'ky': legacy, 'other': legacy};
-    }
+    if (legacy != 0) return {'tj': legacy, 'ky': legacy, 'other': legacy};
     return {};
   }
 
   Song copyWith({
     Map<String, int>? keyOffsets,
     String? origKey,
+    String? lowNote,
+    String? highNote,
     String? memo,
     List<String>? tags,
   }) =>
@@ -84,6 +93,8 @@ class Song {
         albumArt: albumArt,
         keyOffsets: keyOffsets ?? Map.from(this.keyOffsets),
         origKey: origKey ?? this.origKey,
+        lowNote: lowNote ?? this.lowNote,
+        highNote: highNote ?? this.highNote,
         memo: memo ?? this.memo,
         tags: tags ?? this.tags,
         updatedAt: DateTime.now().millisecondsSinceEpoch,

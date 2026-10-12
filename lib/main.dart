@@ -4,6 +4,7 @@ import 'theme/app_theme.dart';
 import 'screens/list_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/recognize_screen.dart';
+import 'screens/range_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,6 +44,7 @@ class _RootScaffoldState extends State<_RootScaffold> {
     ListScreen(key: _listKey),
     const SearchScreen(),
     const RecognizeScreen(),
+    const RangeScreen(),
   ];
 
   @override
@@ -84,6 +86,13 @@ class _RootScaffoldState extends State<_RootScaffold> {
                   label: '인식',
                   active: _tab == 2,
                   onTap: () => setState(() => _tab = 2),
+                ),
+                _NavItem(
+                  icon: Icons.graphic_eq_outlined,
+                  activeIcon: Icons.graphic_eq,
+                  label: '음역대',
+                  active: _tab == 3,
+                  onTap: () => setState(() => _tab = 3),
                 ),
               ],
             ),

@@ -19,7 +19,7 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'singbook.db'),
-      version: 4,
+      version: 5,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE songs (
@@ -30,12 +30,22 @@ class DatabaseHelper {
             key_offset INTEGER DEFAULT 0,
             key_offsets TEXT DEFAULT '{}',
             orig_key TEXT DEFAULT '',
+            low_note TEXT DEFAULT '',
+            high_note TEXT DEFAULT '',
             memo TEXT DEFAULT '',
             tags TEXT DEFAULT '[]',
             updated_at INTEGER NOT NULL
           )
         ''');
         await db.execute('CREATE TABLE tags (name TEXT PRIMARY KEY)');
+        await db.execute('''
+          CREATE TABLE user_vocal_range (
+            id INTEGER PRIMARY KEY,
+            low_note TEXT NOT NULL,
+            high_note TEXT NOT NULL,
+            measured_at INTEGER NOT NULL
+          )
+        ''');
         await _seedDefaultTags(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -60,7 +70,6 @@ class DatabaseHelper {
         if (oldVersion < 4) {
           await db.execute(
               'ALTER TABLE songs ADD COLUMN key_offsets TEXT DEFAULT "{}"');
-          // Migrate old key_offset to all brands
           final rows = await db.query('songs');
           for (final row in rows) {
             final old = row['key_offset'] as int? ?? 0;
@@ -70,6 +79,20 @@ class DatabaseHelper {
                   where: 'id = ?', whereArgs: [row['id']]);
             }
           }
+        }
+        if (oldVersion < 5) {
+          await db.execute(
+              'ALTER TABLE songs ADD COLUMN low_note TEXT DEFAULT ""');
+          await db.execute(
+              'ALTER TABLE songs ADD COLUMN high_note TEXT DEFAULT ""');
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS user_vocal_range (
+              id INTEGER PRIMARY KEY,
+              low_note TEXT NOT NULL,
+              high_note TEXT NOT NULL,
+              measured_at INTEGER NOT NULL
+            )
+          ''');
         }
       },
     );
@@ -82,6 +105,8 @@ class DatabaseHelper {
           conflictAlgorithm: ConflictAlgorithm.ignore);
     }
   }
+
+  // ── Songs ─────────────────────────────────────────────────────────────────
 
   Future<List<Song>> getAll() async {
     final rows = await (await db).query('songs', orderBy: 'updated_at DESC');
@@ -117,12 +142,13 @@ class DatabaseHelper {
     return rows.map(Song.fromMap).toList();
   }
 
+  // ── Tags ──────────────────────────────────────────────────────────────────
+
   Future<void> addTag(String name) async {
     await (await db).insert('tags', {'name': name},
         conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 
-  // Returns tag -> song count map (includes tags with 0 songs)
   Future<Map<String, int>> getAllTags() async {
     final d = await db;
     final tagRows = await d.query('tags', orderBy: 'name');
@@ -138,7 +164,6 @@ class DatabaseHelper {
     return counts;
   }
 
-  // Remove a tag from the registry and all songs
   Future<void> deleteTag(String tag) async {
     final d = await db;
     await d.delete('tags', where: 'name = ?', whereArgs: [tag]);
@@ -146,14 +171,41 @@ class DatabaseHelper {
     final batch = d.batch();
     for (final song in songs) {
       if (song.tags.contains(tag)) {
-        final updated = song.copyWith(
-            tags: song.tags.where((t) => t != tag).toList());
+        final updated =
+            song.copyWith(tags: song.tags.where((t) => t != tag).toList());
         batch.insert('songs', updated.toMap(),
             conflictAlgorithm: ConflictAlgorithm.replace);
       }
     }
     await batch.commit(noResult: true);
   }
+
+  // ── User vocal range ───────────────────────────────────────────────────────
+
+  Future<void> saveUserRange(String low, String high) async {
+    await (await db).insert(
+      'user_vocal_range',
+      {
+        'id': 1,
+        'low_note': low,
+        'high_note': high,
+        'measured_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<Map<String, String>?> getUserRange() async {
+    final rows = await (await db)
+        .query('user_vocal_range', where: 'id = ?', whereArgs: [1]);
+    if (rows.isEmpty) return null;
+    return {
+      'low': rows.first['low_note'] as String,
+      'high': rows.first['high_note'] as String,
+    };
+  }
+
+  // ── Misc ───────────────────────────────────────────────────────────────────
 
   Future<void> deleteAll() async {
     await (await db).delete('songs');
