@@ -113,6 +113,29 @@ class PitchService {
     return '${_names[midi % 12]}${(midi ~/ 12) - 1}';
   }
 
+  static const _solfege = [
+    '도', '도♯', '레', '레♯', '미', '파', '파♯', '솔', '솔♯', '라', '라♯', '시'
+  ];
+
+  static String noteToSolfege(String note) {
+    if (note.isEmpty) return '';
+    final m = RegExp(r'^([A-G]#?)(-?\d+)$').firstMatch(note);
+    if (m == null) return '';
+    final idx = _names.indexOf(m.group(1)!);
+    if (idx < 0) return '';
+    return '${_solfege[idx]}${m.group(2)}';
+  }
+
+  // "18반음 (1.5옥타브)" 형태
+  static String spanLabel(int span) {
+    if (span <= 0) return '';
+    final oct = span / 12;
+    final octStr = oct == oct.truncateToDouble()
+        ? oct.toInt().toString()
+        : oct.toStringAsFixed(1);
+    return '$span반음 ($octStr옥타브)';
+  }
+
   // song range와 user range 비교: 'fit' / 'partial' / 'over'
   static String fitStatus(
       String sLow, String sHigh, String uLow, String uHigh) {

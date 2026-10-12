@@ -320,15 +320,16 @@ class _OverallRangeCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 _NoteBox(note: low, color: const Color(0xFF6BB5FF)),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                Expanded(
                   child: Column(
                     children: [
-                      const Text('──────',
-                          style: TextStyle(color: AppColors.textMuted)),
-                      Text('$span반음',
+                      const Icon(Icons.arrow_forward,
+                          color: AppColors.textMuted, size: 16),
+                      const SizedBox(height: 2),
+                      Text(PitchService.spanLabel(span),
                           style: const TextStyle(
-                              fontSize: 11, color: AppColors.textMuted)),
+                              fontSize: 11, color: AppColors.textMuted),
+                          textAlign: TextAlign.center),
                     ],
                   ),
                 ),
@@ -351,16 +352,27 @@ class _NoteBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final solfege = PitchService.noteToSolfege(note);
     return Container(
-      width: 68,
-      height: 68,
+      width: 76,
+      height: 76,
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withOpacity(0.35)),
       ),
-      child: Center(
-          child: Text(note, style: AppTheme.mono(20, FontWeight.w800, color))),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(note, style: AppTheme.mono(18, FontWeight.w800, color)),
+          const SizedBox(height: 2),
+          Text(solfege,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: color.withOpacity(0.75))),
+        ],
+      ),
     );
   }
 }
@@ -396,7 +408,7 @@ class _RangeBar extends StatelessWidget {
       return Column(
         children: [
           SizedBox(
-            height: 32,
+            height: 44,
             child: Stack(
               children: [
                 // 배경
@@ -404,11 +416,22 @@ class _RangeBar extends StatelessWidget {
                   child: Container(
                     decoration: BoxDecoration(
                       color: AppColors.surface2,
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
                 ),
-                // 옥타브 경계선 (C3, C4, C5)
+                // 4반음마다 짧은 눈금 (매 장3도 - 세밀한 격자)
+                for (int m = _vizMin + 4; m < _vizMax; m += 4)
+                  if (m % 12 != 0) // 옥타브선과 겹치지 않게
+                    Positioned(
+                      left: _frac(m) * w - 0.5,
+                      top: 14,
+                      bottom: 14,
+                      width: 1,
+                      child: Container(
+                          color: AppColors.border.withOpacity(0.6)),
+                    ),
+                // 옥타브 경계선 (C3, C4, C5) — 전체 높이
                 for (final midi in [48, 60, 72])
                   Positioned(
                     left: _frac(midi) * w - 0.5,
@@ -422,16 +445,16 @@ class _RangeBar extends StatelessWidget {
                   Positioned(
                     left: _frac(lMidi) * w,
                     width: max(4.0, _frac(hMidi) * w - _frac(lMidi) * w),
-                    top: 4,
-                    bottom: 4,
+                    top: 6,
+                    bottom: 6,
                     child: Container(
                       decoration: BoxDecoration(
                         color: AppColors.accent,
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(5),
                         boxShadow: [
                           BoxShadow(
-                              color: AppColors.accent.withOpacity(0.4),
-                              blurRadius: 6),
+                              color: AppColors.accent.withOpacity(0.45),
+                              blurRadius: 8),
                         ],
                       ),
                     ),
@@ -614,7 +637,25 @@ class _MeasureSection extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
+        // 실시간 게이지
+        if (hasRange) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: _RangeBar(low: sessionLow, high: sessionHigh),
+          ),
+          const SizedBox(height: 6),
+          Center(
+            child: Text(
+              PitchService.spanLabel(
+                  PitchService.rangeSpan(sessionLow, sessionHigh)),
+              style: const TextStyle(
+                  fontSize: 12, color: AppColors.textMuted),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ] else
+          const SizedBox(height: 14),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
