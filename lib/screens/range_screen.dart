@@ -6,6 +6,8 @@ import '../models/song.dart';
 import '../services/pitch_service.dart';
 import '../theme/app_theme.dart';
 
+enum _MeasurePhase { idle, measuring, result }
+
 class RangeScreen extends StatefulWidget {
   const RangeScreen({super.key});
 
@@ -22,10 +24,13 @@ class _RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
   String _overallHigh = '';
   List<Song> _songsWithRange = [];
 
-  bool _measuring = false;
+  _MeasurePhase _phase = _MeasurePhase.idle;
   String _currentNote = '';
   String _sessionLow = '';
   String _sessionHigh = '';
+  // result phase에 고정된 값
+  String _resultLow = '';
+  String _resultHigh = '';
   StreamSubscription<double?>? _sub;
 
   @override
@@ -37,7 +42,8 @@ class _RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused && _measuring) {
+    if (state == AppLifecycleState.paused &&
+        _phase == _MeasurePhase.measuring) {
       _cancelMeasuring();
     }
   }
@@ -74,14 +80,13 @@ class _RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
     final ok = await _pitch.hasPermission();
     if (!ok) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('마이크 권한이 필요해요')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('마이크 권한이 필요해요')));
       }
       return;
     }
     setState(() {
-      _measuring = true;
+      _phase = _MeasurePhase.measuring;
       _currentNote = '';
       _sessionLow = '';
       _sessionHigh = '';
@@ -94,10 +99,12 @@ class _RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
       final midi = PitchService.noteToMidi(note);
       setState(() {
         _currentNote = note;
-        if (_sessionLow.isEmpty || midi < PitchService.noteToMidi(_sessionLow)) {
+        if (_sessionLow.isEmpty ||
+            midi < PitchService.noteToMidi(_sessionLow)) {
           _sessionLow = note;
         }
-        if (_sessionHigh.isEmpty || midi > PitchService.noteToMidi(_sessionHigh)) {
+        if (_sessionHigh.isEmpty ||
+            midi > PitchService.noteToMidi(_sessionHigh)) {
           _sessionHigh = note;
         }
       });
@@ -108,72 +115,29 @@ class _RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
     await _sub?.cancel();
     _sub = null;
     await _pitch.stop();
-
+    if (!mounted) return;
     if (_sessionLow.isEmpty || _sessionHigh.isEmpty) {
-      if (mounted) setState(() => _measuring = false);
+      setState(() => _phase = _MeasurePhase.idle);
       return;
     }
+    setState(() {
+      _resultLow = _sessionLow;
+      _resultHigh = _sessionHigh;
+      _phase = _MeasurePhase.result;
+    });
+  }
 
-    if (!mounted) return;
-    final low = _sessionLow;
-    final high = _sessionHigh;
-    final now = _formatNow();
-
-    final save = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('이 결과를 저장할까요?',
-            style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('$low ~ $high',
-                style:
-                    AppTheme.mono(20, FontWeight.w800, AppColors.accent)),
-            const SizedBox(height: 6),
-            Text(now,
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textMuted)),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('버리기',
-                style: TextStyle(color: AppColors.textMuted)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
-              foregroundColor: AppColors.bg,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('저장',
-                style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
-
-    if (save == true) {
-      await _db.addUserRangeRecord(low, high);
-      await _load();
-    }
-    if (mounted) setState(() => _measuring = false);
+  Future<void> _saveResult() async {
+    await _db.addUserRangeRecord(_resultLow, _resultHigh);
+    await _load();
+    if (mounted) setState(() => _phase = _MeasurePhase.idle);
   }
 
   Future<void> _cancelMeasuring() async {
     await _sub?.cancel();
     _sub = null;
     await _pitch.stop();
-    if (mounted) setState(() => _measuring = false);
+    if (mounted) setState(() => _phase = _MeasurePhase.idle);
   }
 
   Future<void> _deleteRecord(int id) async {
@@ -187,12 +151,6 @@ class _RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
     _sub?.cancel();
     _pitch.stop();
     super.dispose();
-  }
-
-  static String _formatNow() {
-    final now = DateTime.now();
-    return '${now.year}.${now.month.toString().padLeft(2, '0')}.${now.day.toString().padLeft(2, '0')}'
-        ' ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
   }
 
   static String _formatTs(int ms) {
@@ -222,24 +180,25 @@ class _RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    // 전체 음역대 카드
                     _OverallRangeCard(
                       low: _overallLow,
                       high: _overallHigh,
                       recordCount: _records.length,
                     ),
                     const SizedBox(height: 12),
-                    // 측정 섹션
                     _MeasureSection(
-                      measuring: _measuring,
+                      phase: _phase,
                       currentNote: _currentNote,
                       sessionLow: _sessionLow,
                       sessionHigh: _sessionHigh,
+                      resultLow: _resultLow,
+                      resultHigh: _resultHigh,
                       onStart: _startMeasuring,
                       onStop: _stopMeasuring,
                       onCancel: _cancelMeasuring,
+                      onSave: _saveResult,
+                      onRemeasure: _startMeasuring,
                     ),
-                    // 곡 음역 비교
                     if (_songsWithRange.isNotEmpty &&
                         _overallLow.isNotEmpty) ...[
                       const SizedBox(height: 20),
@@ -249,7 +208,6 @@ class _RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
                         myHigh: _overallHigh,
                       ),
                     ],
-                    // 기록 이력
                     if (_records.isNotEmpty) ...[
                       const SizedBox(height: 20),
                       _HistoryList(
@@ -381,16 +339,13 @@ class _NoteBox extends StatelessWidget {
 class _RangeBar extends StatelessWidget {
   final String low;
   final String high;
-  const _RangeBar({
-    required this.low,
-    required this.high,
-  });
+
+  const _RangeBar({required this.low, required this.high});
 
   static const _vizMin = 36; // C2
   static const _vizMax = 84; // C6
-  static const _vizSpan = _vizMax - _vizMin; // 48
+  static const _vizSpan = _vizMax - _vizMin;
 
-  // C2~C6 옥타브 마커: MIDI 36,48,60,72,84
   static const _octaveLabels = ['C2', 'C3', 'C4', 'C5', 'C6'];
   static const _octaveMidi = [36, 48, 60, 72, 84];
 
@@ -404,14 +359,12 @@ class _RangeBar extends StatelessWidget {
 
     return LayoutBuilder(builder: (_, constraints) {
       final w = constraints.maxWidth;
-
       return Column(
         children: [
           SizedBox(
             height: 44,
             child: Stack(
               children: [
-                // 배경
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(
@@ -420,9 +373,9 @@ class _RangeBar extends StatelessWidget {
                     ),
                   ),
                 ),
-                // 4반음마다 짧은 눈금 (매 장3도 - 세밀한 격자)
+                // 4반음마다 짧은 눈금
                 for (int m = _vizMin + 4; m < _vizMax; m += 4)
-                  if (m % 12 != 0) // 옥타브선과 겹치지 않게
+                  if (m % 12 != 0)
                     Positioned(
                       left: _frac(m) * w - 0.5,
                       top: 14,
@@ -431,7 +384,7 @@ class _RangeBar extends StatelessWidget {
                       child: Container(
                           color: AppColors.border.withOpacity(0.6)),
                     ),
-                // 옥타브 경계선 (C3, C4, C5) — 전체 높이
+                // 옥타브 경계선 (C3, C4, C5)
                 for (final midi in [48, 60, 72])
                   Positioned(
                     left: _frac(midi) * w - 0.5,
@@ -440,7 +393,7 @@ class _RangeBar extends StatelessWidget {
                     width: 1,
                     child: Container(color: AppColors.border),
                   ),
-                // 전체 범위 바
+                // 범위 바
                 if (low.isNotEmpty && high.isNotEmpty)
                   Positioned(
                     left: _frac(lMidi) * w,
@@ -463,7 +416,6 @@ class _RangeBar extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          // 옥타브 라벨
           Row(
             children: List.generate(_octaveMidi.length, (i) {
               return Expanded(
@@ -490,22 +442,30 @@ class _RangeBar extends StatelessWidget {
 // ── 측정 섹션 ────────────────────────────────────────────────────────────────
 
 class _MeasureSection extends StatelessWidget {
-  final bool measuring;
+  final _MeasurePhase phase;
   final String currentNote;
   final String sessionLow;
   final String sessionHigh;
+  final String resultLow;
+  final String resultHigh;
   final VoidCallback onStart;
   final VoidCallback onStop;
   final VoidCallback onCancel;
+  final VoidCallback onSave;
+  final VoidCallback onRemeasure;
 
   const _MeasureSection({
-    required this.measuring,
+    required this.phase,
     required this.currentNote,
     required this.sessionLow,
     required this.sessionHigh,
+    required this.resultLow,
+    required this.resultHigh,
     required this.onStart,
     required this.onStop,
     required this.onCancel,
+    required this.onSave,
+    required this.onRemeasure,
   });
 
   @override
@@ -517,7 +477,11 @@ class _MeasureSection extends StatelessWidget {
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: measuring ? _buildActive() : _buildIdle(),
+      child: switch (phase) {
+        _MeasurePhase.idle => _buildIdle(),
+        _MeasurePhase.measuring => _buildMeasuring(),
+        _MeasurePhase.result => _buildResult(),
+      },
     );
   }
 
@@ -544,8 +508,7 @@ class _MeasureSection extends StatelessWidget {
             onPressed: onStart,
             icon: const Icon(Icons.mic, size: 16),
             label: const Text('측정 시작',
-                style:
-                    TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.accent,
               foregroundColor: AppColors.bg,
@@ -558,13 +521,11 @@ class _MeasureSection extends StatelessWidget {
     );
   }
 
-  Widget _buildActive() {
+  Widget _buildMeasuring() {
     final hasRange = sessionLow.isNotEmpty;
     final pulsing = currentNote.isNotEmpty;
-
     return Column(
       children: [
-        // 감지 인디케이터
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -581,14 +542,15 @@ class _MeasureSection extends StatelessWidget {
               pulsing ? currentNote : '감지 중...',
               style: TextStyle(
                   fontSize: 13,
-                  color: pulsing ? AppColors.accent : AppColors.textMuted),
+                  color:
+                      pulsing ? AppColors.accent : AppColors.textMuted),
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        // 최저~최고
+        const SizedBox(height: 14),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           decoration: BoxDecoration(
             color: AppColors.surface2,
             borderRadius: BorderRadius.circular(12),
@@ -600,13 +562,15 @@ class _MeasureSection extends StatelessWidget {
                 children: [
                   Text(
                     sessionLow.isEmpty ? '–' : sessionLow,
-                    style: AppTheme.mono(
-                        28,
-                        FontWeight.w900,
+                    style: AppTheme.mono(28, FontWeight.w900,
                         sessionLow.isEmpty
                             ? AppColors.textMuted
                             : const Color(0xFF6BB5FF)),
                   ),
+                  if (sessionLow.isNotEmpty)
+                    Text(PitchService.noteToSolfege(sessionLow),
+                        style: const TextStyle(
+                            fontSize: 11, color: AppColors.textMuted)),
                   const Text('최저음',
                       style: TextStyle(
                           fontSize: 10, color: AppColors.textMuted)),
@@ -622,13 +586,15 @@ class _MeasureSection extends StatelessWidget {
                 children: [
                   Text(
                     sessionHigh.isEmpty ? '–' : sessionHigh,
-                    style: AppTheme.mono(
-                        28,
-                        FontWeight.w900,
+                    style: AppTheme.mono(28, FontWeight.w900,
                         sessionHigh.isEmpty
                             ? AppColors.textMuted
                             : AppColors.accent),
                   ),
+                  if (sessionHigh.isNotEmpty)
+                    Text(PitchService.noteToSolfege(sessionHigh),
+                        style: const TextStyle(
+                            fontSize: 11, color: AppColors.textMuted)),
                   const Text('최고음',
                       style: TextStyle(
                           fontSize: 10, color: AppColors.textMuted)),
@@ -637,25 +603,19 @@ class _MeasureSection extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 14),
-        // 실시간 게이지
         if (hasRange) ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: _RangeBar(low: sessionLow, high: sessionHigh),
-          ),
+          const SizedBox(height: 14),
+          _RangeBar(low: sessionLow, high: sessionHigh),
           const SizedBox(height: 6),
-          Center(
-            child: Text(
-              PitchService.spanLabel(
-                  PitchService.rangeSpan(sessionLow, sessionHigh)),
-              style: const TextStyle(
-                  fontSize: 12, color: AppColors.textMuted),
-            ),
+          Text(
+            PitchService.spanLabel(
+                PitchService.rangeSpan(sessionLow, sessionHigh)),
+            style: const TextStyle(
+                fontSize: 12, color: AppColors.textMuted),
           ),
-          const SizedBox(height: 10),
         ] else
           const SizedBox(height: 14),
+        const SizedBox(height: 4),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -684,9 +644,80 @@ class _MeasureSection extends StatelessWidget {
       ],
     );
   }
+
+  Widget _buildResult() {
+    final span = PitchService.rangeSpan(resultLow, resultHigh);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('측정 결과',
+            style: TextStyle(
+                fontSize: 13, color: AppColors.textSecondary)),
+        const SizedBox(height: 14),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _NoteBox(note: resultLow, color: const Color(0xFF6BB5FF)),
+            Expanded(
+              child: Column(
+                children: [
+                  const Icon(Icons.arrow_forward,
+                      color: AppColors.textMuted, size: 16),
+                  const SizedBox(height: 2),
+                  Text(PitchService.spanLabel(span),
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.textMuted),
+                      textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+            _NoteBox(note: resultHigh, color: AppColors.accent),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _RangeBar(low: resultLow, high: resultHigh),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: onRemeasure,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('다시 측정',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textSecondary,
+                  side: const BorderSide(color: AppColors.border2),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: onSave,
+                icon: const Icon(Icons.save_outlined, size: 16),
+                label: const Text('저장',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.bg,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 }
 
-// ── 기록 이력 ─────────────────────────────────────────────────────────────────
+// ── 기록 이력 (월 → 일 2단계 접힘/펼침) ──────────────────────────────────────
 
 class _HistoryList extends StatelessWidget {
   final List<Map<String, dynamic>> records;
@@ -699,8 +730,27 @@ class _HistoryList extends StatelessWidget {
     required this.formatTs,
   });
 
+  static const _weekdays = ['월', '화', '수', '목', '금', '토', '일'];
+
+  // month → day → records (insertion order = DESC by measured_at)
+  Map<String, Map<String, List<Map<String, dynamic>>>> get _grouped {
+    final map = <String, Map<String, List<Map<String, dynamic>>>>{};
+    for (final r in records) {
+      final dt = DateTime.fromMillisecondsSinceEpoch(r['measured_at'] as int);
+      final monthKey =
+          '${dt.year}년 ${dt.month.toString().padLeft(2, '0')}월';
+      final wd = _weekdays[dt.weekday - 1];
+      final dayKey =
+          '${dt.month}월 ${dt.day}일 ($wd)';
+      map.putIfAbsent(monthKey, () => {}).putIfAbsent(dayKey, () => []).add(r);
+    }
+    return map;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final grouped = _grouped;
+    final months = grouped.keys.toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -710,67 +760,215 @@ class _HistoryList extends StatelessWidget {
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary)),
         const SizedBox(height: 10),
-        ...records.map((r) {
-          final id = r['id'] as int;
-          final low = r['low_note'] as String;
-          final high = r['high_note'] as String;
-          final ts = r['measured_at'] as int;
-          final span = PitchService.rangeSpan(low, high);
-          return Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(low,
-                              style: AppTheme.mono(
-                                  15,
-                                  FontWeight.w700,
-                                  const Color(0xFF6BB5FF))),
-                          const Text('  ~  ',
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.textMuted)),
-                          Text(high,
-                              style: AppTheme.mono(
-                                  15, FontWeight.w700, AppColors.accent)),
-                          const SizedBox(width: 8),
-                          Text('$span반음',
-                              style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textMuted)),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(formatTs(ts),
-                          style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.textMuted)),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline,
-                      color: AppColors.textMuted, size: 20),
-                  onPressed: () => onDelete(id),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
-            ),
+        ...months.asMap().entries.map((mEntry) {
+          final isFirstMonth = mEntry.key == 0;
+          final monthKey = mEntry.value;
+          final dayMap = grouped[monthKey]!;
+          final totalCount =
+              dayMap.values.fold(0, (s, l) => s + l.length);
+          return _MonthGroup(
+            monthLabel: monthKey,
+            totalCount: totalCount,
+            dayMap: dayMap,
+            initiallyExpanded: isFirstMonth,
+            isFirstMonth: isFirstMonth,
+            onDelete: onDelete,
+            formatTs: formatTs,
           );
         }),
       ],
+    );
+  }
+}
+
+class _MonthGroup extends StatelessWidget {
+  final String monthLabel;
+  final int totalCount;
+  final Map<String, List<Map<String, dynamic>>> dayMap;
+  final bool initiallyExpanded;
+  final bool isFirstMonth;
+  final void Function(int id) onDelete;
+  final String Function(int ms) formatTs;
+
+  const _MonthGroup({
+    required this.monthLabel,
+    required this.totalCount,
+    required this.dayMap,
+    required this.initiallyExpanded,
+    required this.isFirstMonth,
+    required this.onDelete,
+    required this.formatTs,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final days = dayMap.keys.toList();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: initiallyExpanded,
+          tilePadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+          title: Row(
+            children: [
+              Text(monthLabel,
+                  style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary)),
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.surface2,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text('$totalCount개',
+                    style: const TextStyle(
+                        fontSize: 11, color: AppColors.textMuted)),
+              ),
+            ],
+          ),
+          iconColor: AppColors.textMuted,
+          collapsedIconColor: AppColors.textMuted,
+          children: [
+            const Divider(
+                color: AppColors.border,
+                height: 1,
+                indent: 16,
+                endIndent: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Column(
+                children: days.asMap().entries.map((dEntry) {
+                  final isFirstDay = dEntry.key == 0;
+                  final dayKey = dEntry.value;
+                  final dayRecords = dayMap[dayKey]!;
+                  return _DayGroup(
+                    dayLabel: dayKey,
+                    records: dayRecords,
+                    initiallyExpanded: isFirstMonth && isFirstDay,
+                    onDelete: onDelete,
+                    formatTs: formatTs,
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DayGroup extends StatelessWidget {
+  final String dayLabel;
+  final List<Map<String, dynamic>> records;
+  final bool initiallyExpanded;
+  final void Function(int id) onDelete;
+  final String Function(int ms) formatTs;
+
+  const _DayGroup({
+    required this.dayLabel,
+    required this.records,
+    required this.initiallyExpanded,
+    required this.onDelete,
+    required this.formatTs,
+  });
+
+  static String _timeOnly(int ms) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: initiallyExpanded,
+          tilePadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+          dense: true,
+          title: Row(
+            children: [
+              Text(dayLabel,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textSecondary)),
+              const SizedBox(width: 6),
+              Text('${records.length}건',
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textMuted)),
+            ],
+          ),
+          iconColor: AppColors.textMuted,
+          collapsedIconColor: AppColors.textMuted,
+          children: records.map((r) {
+            final id = r['id'] as int;
+            final low = r['low_note'] as String;
+            final high = r['high_note'] as String;
+            final ts = r['measured_at'] as int;
+            final span = PitchService.rangeSpan(low, high);
+            return Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Row(
+                children: [
+                  Text(_timeOnly(ts),
+                      style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textMuted,
+                          fontFeatures: [FontFeature.tabularFigures()])),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Text(low,
+                            style: AppTheme.mono(13, FontWeight.w700,
+                                const Color(0xFF6BB5FF))),
+                        const Text('  ~  ',
+                            style: TextStyle(
+                                fontSize: 12, color: AppColors.textMuted)),
+                        Text(high,
+                            style: AppTheme.mono(
+                                13, FontWeight.w700, AppColors.accent)),
+                        const SizedBox(width: 6),
+                        Text('$span반음',
+                            style: const TextStyle(
+                                fontSize: 11, color: AppColors.textMuted)),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline,
+                        color: AppColors.textMuted, size: 16),
+                    onPressed: () => onDelete(id),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ),
     );
   }
 }
@@ -865,8 +1063,7 @@ class _SongRangeRow extends StatelessWidget {
             children: [
               Icon(icon, color: color, size: 20),
               const SizedBox(height: 2),
-              Text(label,
-                  style: TextStyle(fontSize: 10, color: color)),
+              Text(label, style: TextStyle(fontSize: 10, color: color)),
             ],
           ),
         ],
@@ -913,7 +1110,6 @@ class _SongCompareBar extends StatelessWidget {
                 ),
               ),
             ),
-            // 내 음역
             Positioned(
               left: _f(ul) * w,
               width: max(2.0, _f(uh) * w - _f(ul) * w),
@@ -926,7 +1122,6 @@ class _SongCompareBar extends StatelessWidget {
                 ),
               ),
             ),
-            // 곡 음역
             Positioned(
               left: _f(sl) * w,
               width: max(2.0, _f(sh) * w - _f(sl) * w),
