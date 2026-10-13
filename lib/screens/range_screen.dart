@@ -988,6 +988,8 @@ class _SongKeyMap extends StatefulWidget {
 
 class _SongKeyMapState extends State<_SongKeyMap> {
   String _brand = 'tj';
+  bool _showAll = false;
+  static const _pageSize = 5;
 
   static const _vizMin = 36; // C2
   static const _vizMax = 84; // C6
@@ -1020,6 +1022,28 @@ class _SongKeyMapState extends State<_SongKeyMap> {
         .where((s) => s.origKey.isEmpty)
         .toList();
 
+    // 각 곡의 midi + color 미리 계산
+    final songData = withKey.map((s) {
+      final offset = s.keyOffsetFor(_brand);
+      final midi = PitchService.origKeyToMidi(s.origKey, offset);
+      final color = _dotColor(midi);
+      final label =
+          '${s.origKey}${offset == 0 ? '' : (offset > 0 ? '+$offset' : '$offset')}';
+      return (song: s, midi: midi, color: color, label: label);
+    }).toList();
+
+    // 같은 MIDI 위치에 있는 곡들 그룹핑 (스택용)
+    final Map<int, List<Color>> stackMap = {};
+    for (final d in songData) {
+      final pos = d.midi.clamp(_vizMin, _vizMax);
+      stackMap.putIfAbsent(pos, () => []).add(d.color);
+    }
+
+    final visible = _showAll
+        ? songData
+        : songData.take(_pageSize).toList();
+    final hiddenCount = songData.length - _pageSize;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -1042,40 +1066,44 @@ class _SongKeyMapState extends State<_SongKeyMap> {
               ...Song.brands.map((b) {
                 final selected = _brand == b;
                 return GestureDetector(
-                  onTap: () => setState(() => _brand = b),
+                  onTap: () => setState(() {
+                    _brand = b;
+                    _showAll = false;
+                  }),
                   child: Container(
                     margin: const EdgeInsets.only(left: 6),
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: selected
-                          ? AppColors.accent
-                          : AppColors.surface2,
+                      color: selected ? AppColors.accent : AppColors.surface2,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(Song.brandLabels[b]!,
                         style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: selected
-                                ? AppColors.bg
-                                : AppColors.textMuted)),
+                            color:
+                                selected ? AppColors.bg : AppColors.textMuted)),
                   ),
                 );
               }),
             ],
           ),
           const SizedBox(height: 16),
-          // 공유 축 헤더
+          // 오버뷰 축 바 (모든 곡 점 표시 + 스택)
           LayoutBuilder(builder: (_, constraints) {
             final w = constraints.maxWidth;
+            // 최대 스택 높이 계산 (최대 3단)
+            final maxStack =
+                stackMap.values.fold(0, (m, v) => max(m, v.length));
+            final barH = max(28.0, 12.0 + min(maxStack, 3) * 12.0);
+
             return Column(
               children: [
                 SizedBox(
-                  height: 28,
+                  height: barH,
                   child: Stack(
                     children: [
-                      // 배경
                       Positioned.fill(
                         child: Container(
                           decoration: BoxDecoration(
@@ -1091,23 +1119,21 @@ class _SongKeyMapState extends State<_SongKeyMap> {
                           top: 0,
                           bottom: 0,
                           width: 1,
-                          child:
-                              Container(color: AppColors.border),
+                          child: Container(color: AppColors.border),
                         ),
                       // 내 음역대 배경
-                      if (widget.myLow.isNotEmpty &&
-                          widget.myHigh.isNotEmpty)
+                      if (widget.myLow.isNotEmpty && widget.myHigh.isNotEmpty)
                         Positioned(
                           left: _frac(PitchService.noteToMidi(widget.myLow)
                                   .clamp(_vizMin, _vizMax)) *
                               w,
                           width: max(
                             4.0,
-                            _frac(PitchService.noteToMidi(widget.myHigh)
-                                    .clamp(_vizMin, _vizMax)) *
-                                    w -
-                                _frac(PitchService.noteToMidi(widget.myLow)
-                                        .clamp(_vizMin, _vizMax)) *
+                            (_frac(PitchService.noteToMidi(widget.myHigh)
+                                            .clamp(_vizMin, _vizMax)) -
+                                        _frac(
+                                            PitchService.noteToMidi(widget.myLow)
+                                                .clamp(_vizMin, _vizMax))) *
                                     w,
                           ),
                           top: 0,
@@ -1119,11 +1145,61 @@ class _SongKeyMapState extends State<_SongKeyMap> {
                             ),
                           ),
                         ),
+                      // 곡 점들 (스택)
+                      for (final entry in stackMap.entries)
+                        ...entry.value
+                            .take(3)
+                            .toList()
+                            .asMap()
+                            .entries
+                            .map((e) {
+                          final stackIdx = e.key;
+                          final color = e.value;
+                          final dotX = (_frac(entry.key) * w - 5)
+                              .clamp(0.0, w - 10);
+                          return Positioned(
+                            left: dotX,
+                            bottom: 4.0 + stackIdx * 12.0,
+                            child: Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: color,
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: color.withOpacity(0.6),
+                                      blurRadius: 4),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                      // 3개 초과 시 "+N" 뱃지
+                      for (final entry
+                          in stackMap.entries.where((e) => e.value.length > 3))
+                        Positioned(
+                          left: (_frac(entry.key) * w + 6)
+                              .clamp(0.0, w - 20),
+                          bottom: 4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 3, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              '+${entry.value.length - 3}',
+                              style: const TextStyle(
+                                  fontSize: 8, color: AppColors.textMuted),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 4),
-                // 축 레이블
                 Row(
                   children: List.generate(_octaveMidi.length, (i) {
                     return Expanded(
@@ -1137,8 +1213,7 @@ class _SongKeyMapState extends State<_SongKeyMap> {
                             : Alignment.centerLeft,
                         child: Text(_octaveLabels[i],
                             style: const TextStyle(
-                                fontSize: 9,
-                                color: AppColors.textMuted)),
+                                fontSize: 9, color: AppColors.textMuted)),
                       ),
                     );
                   }),
@@ -1146,108 +1221,132 @@ class _SongKeyMapState extends State<_SongKeyMap> {
               ],
             );
           }),
-          const SizedBox(height: 10),
-          // 원키 있는 곡들
+          const SizedBox(height: 12),
+          // 곡 없음
           if (withKey.isEmpty && noKey.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Center(
                 child: Text('등록된 곡이 없어요',
-                    style: TextStyle(
-                        fontSize: 13, color: AppColors.textMuted)),
+                    style:
+                        TextStyle(fontSize: 13, color: AppColors.textMuted)),
               ),
             ),
+          // 원키 있는 곡 목록 (접기/펼치기)
           if (withKey.isNotEmpty)
             LayoutBuilder(builder: (_, constraints) {
               const nameW = 96.0;
               const labelW = 48.0;
               const gap = 8.0;
-              final axisW = constraints.maxWidth - nameW - labelW - gap * 2;
+              final axisW =
+                  constraints.maxWidth - nameW - labelW - gap * 2;
               return Column(
-                children: withKey.map((song) {
-                  final offset = song.keyOffsetFor(_brand);
-                  final midi = PitchService.origKeyToMidi(song.origKey, offset);
-                  final color = _dotColor(midi);
-                  final keyLabel =
-                      '${song.origKey}${offset == 0 ? '' : (offset > 0 ? '+$offset' : '$offset')}';
-                  final dotX =
-                      _frac(midi.clamp(_vizMin, _vizMax)) * axisW;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: nameW,
-                          child: Text(song.title,
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textSecondary),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
-                        ),
-                        const SizedBox(width: gap),
-                        SizedBox(
-                          width: axisW,
-                          height: 20,
-                          child: Stack(
-                            children: [
-                              // Stack이 SizedBox 전체를 채우게 함
-                              const Positioned.fill(child: SizedBox()),
-                              Positioned(
-                                left: (dotX - 6).clamp(0.0, axisW - 12),
-                                top: 4,
-                                child: Container(
-                                  width: 12,
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: color,
-                                    boxShadow: [
-                                      BoxShadow(
-                                          color: color.withOpacity(0.5),
-                                          blurRadius: 6),
-                                    ],
+                children: [
+                  ...visible.map((d) {
+                    final dotX =
+                        _frac(d.midi.clamp(_vizMin, _vizMax)) * axisW;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: nameW,
+                            child: Text(d.song.title,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          const SizedBox(width: gap),
+                          SizedBox(
+                            width: axisW,
+                            height: 20,
+                            child: Stack(
+                              children: [
+                                const Positioned.fill(child: SizedBox()),
+                                Positioned(
+                                  left: (dotX - 6).clamp(0.0, axisW - 12),
+                                  top: 4,
+                                  child: Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: d.color,
+                                      boxShadow: [
+                                        BoxShadow(
+                                            color: d.color.withOpacity(0.5),
+                                            blurRadius: 6),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
+                          const SizedBox(width: gap),
+                          SizedBox(
+                            width: labelW,
+                            child: Text(d.label,
+                                style: AppTheme.mono(
+                                    11, FontWeight.w600, d.color),
+                                textAlign: TextAlign.right),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  // 더 보기 / 접기 버튼
+                  if (songData.length > _pageSize)
+                    GestureDetector(
+                      onTap: () =>
+                          setState(() => _showAll = !_showAll),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _showAll
+                                  ? '접기'
+                                  : '더 보기 $hiddenCount개',
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textMuted),
+                            ),
+                            Icon(
+                              _showAll
+                                  ? Icons.expand_less
+                                  : Icons.expand_more,
+                              color: AppColors.textMuted,
+                              size: 16,
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: gap),
-                        SizedBox(
-                          width: labelW,
-                          child: Text(keyLabel,
-                              style: AppTheme.mono(11, FontWeight.w600, color),
-                              textAlign: TextAlign.right),
-                        ),
-                      ],
+                      ),
                     ),
-                  );
-                }).toList(),
+                ],
               );
             }),
           // 원키 미입력 구분선 + 목록
           if (noKey.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
-                  child: Container(
-                    height: 1,
-                    color: AppColors.border,
-                    margin: const EdgeInsets.only(right: 8),
-                  ),
-                ),
+                    child: Container(
+                        height: 1,
+                        color: AppColors.border,
+                        margin: const EdgeInsets.only(right: 8))),
                 const Text('원키 미입력',
                     style: TextStyle(
                         fontSize: 11, color: AppColors.textMuted)),
                 Expanded(
-                  child: Container(
-                    height: 1,
-                    color: AppColors.border,
-                    margin: const EdgeInsets.only(left: 8),
-                  ),
-                ),
+                    child: Container(
+                        height: 1,
+                        color: AppColors.border,
+                        margin: const EdgeInsets.only(left: 8))),
               ],
             ),
             const SizedBox(height: 8),
@@ -1260,15 +1359,13 @@ class _SongKeyMapState extends State<_SongKeyMap> {
                   children: [
                     const Text('◌',
                         style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textMuted)),
+                            fontSize: 14, color: AppColors.textMuted)),
                     const SizedBox(width: 4),
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 120),
                       child: Text(song.title,
                           style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textMuted),
+                              fontSize: 12, color: AppColors.textMuted),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
                     ),
