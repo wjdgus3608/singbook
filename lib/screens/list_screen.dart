@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../db/database.dart';
 import '../models/song.dart';
 import '../theme/app_theme.dart';
+import '../widgets/help_sheet.dart';
 import '../widgets/song_card.dart';
 import 'detail_screen.dart';
 import 'settings_screen.dart';
@@ -87,6 +88,22 @@ class ListScreenState extends State<ListScreen> {
                             fontSize: 24,
                             fontWeight: FontWeight.w800,
                             color: AppColors.textPrimary)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.help_outline,
+                        color: AppColors.textMuted, size: 20),
+                    onPressed: () => showHelpSheet(context,
+                        title: '내 노래책 사용법',
+                        items: [
+                          const HelpItem(Icons.touch_app_outlined, '곡 상세 편집',
+                              '곡을 탭하면 노래방별 키 조절, 원키, 태그, 메모를 편집할 수 있어요.'),
+                          const HelpItem(Icons.mic_outlined, '노래 인식으로 추가',
+                              '인식 탭에서 전주가 나올 때 버튼을 누르면 자동으로 곡이 인식되어 여기에 추가됩니다.'),
+                          const HelpItem(Icons.search_outlined, '검색으로 추가',
+                              '검색 탭에서 곡명/아티스트를 검색하고 결과를 탭해 추가할 수 있어요.'),
+                          const HelpItem(Icons.label_outline, '태그 필터',
+                              '태그를 탭하면 해당 태그가 붙은 곡만 필터링됩니다. 태그는 설정에서 관리해요.'),
+                        ]),
                   ),
                   IconButton(
                     icon: const Icon(Icons.settings_outlined,

@@ -5,6 +5,7 @@ import '../db/database.dart';
 import '../models/song.dart';
 import '../services/pitch_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/help_sheet.dart';
 
 enum _MeasurePhase { idle, measuring, result }
 
@@ -168,13 +169,35 @@ class RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 14, 20, 0),
-              child: Text('음역대',
-                  style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 8, 0),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text('음역대',
+                        style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.help_outline,
+                        color: AppColors.textMuted, size: 20),
+                    onPressed: () => showHelpSheet(context,
+                        title: '음역대 사용법',
+                        items: [
+                          const HelpItem(Icons.mic_outlined, '내 음역대 측정',
+                              '측정 시작을 누르고 최대한 낮은 음부터 높은 음까지 불러보세요. 완료 후 저장하면 기록이 쌓여요.'),
+                          const HelpItem(Icons.bar_chart_outlined, '전체 음역대',
+                              '저장된 모든 측정 기록 중 가장 낮은 음과 가장 높은 음을 합산해 나의 전체 음역대를 보여줍니다.'),
+                          const HelpItem(Icons.scatter_plot_outlined, '내 곡 키 위치',
+                              '각 곡의 원키가 내 음역대 어디쯤에 위치하는지 점으로 표시됩니다. 원키는 각 곡 상세에서 설정하세요.'),
+                          const HelpItem(Icons.palette_outlined, '점 색상',
+                              '초록=내 음역대 안, 노랑=경계, 빨강=범위 초과. 음역대를 측정해야 색상이 나타나요.'),
+                        ]),
+                  ),
+                ],
+              ),
             ),
             Expanded(
               child: SingleChildScrollView(

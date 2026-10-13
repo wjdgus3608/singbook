@@ -5,6 +5,7 @@ import '../models/song.dart';
 import '../services/acrcloud_service.dart';
 import '../services/music_search_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/help_sheet.dart';
 import 'detail_screen.dart';
 
 enum _State { idle, recording, processing, result, error, noMatch }
@@ -138,15 +139,32 @@ class _RecognizeScreenState extends State<RecognizeScreen>
       body: SafeArea(
         child: Column(
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 12, 20, 0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text('인식',
-                    style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 8, 0),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text('인식',
+                        style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.help_outline,
+                        color: AppColors.textMuted, size: 20),
+                    onPressed: () => showHelpSheet(context,
+                        title: '인식 사용법',
+                        items: [
+                          const HelpItem(Icons.music_note_outlined, '노래 인식',
+                              '노래방에서 전주가 나올 때 버튼을 탭하세요. 10초간 음악을 듣고 곡을 자동으로 찾아줍니다.'),
+                          const HelpItem(Icons.add_circle_outline, '내 목록에 추가',
+                              '인식에 성공하면 "내 목록에 추가" 버튼으로 저장하고 키 정보를 바로 입력할 수 있어요.'),
+                          const HelpItem(Icons.tips_and_updates_outlined, '인식 팁',
+                              '전주가 시작되는 순간 탭하면 인식률이 높아요. 소리가 너무 작거나 시끄러우면 실패할 수 있어요.'),
+                        ]),
+                  ),
+                ],
               ),
             ),
             Expanded(child: Center(child: _buildBody())),

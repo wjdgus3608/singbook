@@ -3,6 +3,7 @@ import '../db/database.dart';
 import '../models/song.dart';
 import '../services/music_search_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/help_sheet.dart';
 import 'detail_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -76,9 +77,38 @@ class _SearchScreenState extends State<SearchScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 8, 0),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text('검색',
+                        style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.help_outline,
+                        color: AppColors.textMuted, size: 20),
+                    onPressed: () => showHelpSheet(context,
+                        title: '검색 사용법',
+                        items: [
+                          const HelpItem(Icons.search_outlined, '곡 검색',
+                              '곡명 또는 아티스트 이름을 입력하면 iTunes에서 검색합니다.'),
+                          const HelpItem(Icons.add_circle_outline, '내 목록에 추가',
+                              '검색 결과를 탭하면 상세 화면으로 이동해 키, 태그 등을 설정하고 저장할 수 있어요.'),
+                          const HelpItem(Icons.history, '최근 검색',
+                              '이전에 검색한 키워드가 저장되어 빠르게 재검색할 수 있어요.'),
+                        ]),
+                  ),
+                ],
+              ),
+            ),
             // Search bar
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
               child: Container(
                 height: 48,
                 decoration: BoxDecoration(
