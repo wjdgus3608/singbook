@@ -32,6 +32,7 @@ class RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
   String _currentNote = '';
   String _sessionLow = '';
   String _sessionHigh = '';
+  DateTime _lastNoteDisplay = DateTime(0);
   // result phase에 고정된 값
   String _resultLow = '';
   String _resultHigh = '';
@@ -105,8 +106,11 @@ class RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
       final note = PitchService.hzToNote(hz);
       if (note.isEmpty) return;
       final midi = PitchService.noteToMidi(note);
+      final now = DateTime.now();
+      final showNote = now.difference(_lastNoteDisplay).inMilliseconds >= 1000;
+      if (showNote) _lastNoteDisplay = now;
       setState(() {
-        _currentNote = note;
+        if (showNote) _currentNote = note;
         if (_sessionLow.isEmpty ||
             midi < PitchService.noteToMidi(_sessionLow)) {
           _sessionLow = note;
