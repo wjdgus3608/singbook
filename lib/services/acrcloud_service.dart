@@ -49,11 +49,18 @@ class AcrCloudService {
 
   Future<bool> hasPermission() => _recorder.hasPermission();
 
+  Stream<Amplitude> amplitudeStream() =>
+      _recorder.onAmplitudeChanged(const Duration(milliseconds: 100));
+
   Future<void> startRecording() async {
     final dir = await getTemporaryDirectory();
     _recordPath = '${dir.path}/acr_sample.wav';
     await _recorder.start(
-      const RecordConfig(encoder: AudioEncoder.wav, sampleRate: 16000),
+      const RecordConfig(
+        encoder: AudioEncoder.wav,
+        sampleRate: 16000,
+        numChannels: 1,
+      ),
       path: _recordPath!,
     );
   }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:record/record.dart';
 import '../db/database.dart';
 import '../models/song.dart';
 import '../services/acrcloud_service.dart';
@@ -26,6 +27,8 @@ class _RecognizeScreenState extends State<RecognizeScreen>
   _State _state = _State.idle;
   int _countdown = 10;
   Timer? _timer;
+  StreamSubscription<Amplitude>? _ampSub;
+  double _amplitude = -60.0;
   Song? _song;
   String _errorMsg = '';
 
@@ -56,6 +59,10 @@ class _RecognizeScreenState extends State<RecognizeScreen>
     setState(() {
       _state = _State.recording;
       _countdown = 10;
+      _amplitude = -60.0;
+    });
+    _ampSub = _acr.amplitudeStream().listen((amp) {
+      if (mounted) setState(() => _amplitude = amp.current);
     });
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) { t.cancel(); return; }
@@ -69,6 +76,8 @@ class _RecognizeScreenState extends State<RecognizeScreen>
 
   void _stopAndProcess() async {
     _timer?.cancel();
+    _ampSub?.cancel();
+    _ampSub = null;
     setState(() => _state = _State.processing);
     try {
       final result = await _acr.stopAndRecognize();
@@ -112,6 +121,8 @@ class _RecognizeScreenState extends State<RecognizeScreen>
 
   void _cancel() {
     _timer?.cancel();
+    _ampSub?.cancel();
+    _ampSub = null;
     _acr.cancelRecording();
     setState(() => _state = _State.idle);
   }
@@ -137,6 +148,7 @@ class _RecognizeScreenState extends State<RecognizeScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
+    _ampSub?.cancel();
     super.dispose();
   }
 
@@ -187,7 +199,7 @@ class _RecognizeScreenState extends State<RecognizeScreen>
       case _State.idle:
         return _IdleView(onTap: _startRecording);
       case _State.recording:
-        return _RecordingView(countdown: _countdown, onCancel: _cancel);
+        return _RecordingView(countdown: _countdown, amplitude: _amplitude, onCancel: _cancel);
       case _State.processing:
         return const _ProcessingView();
       case _State.result:
@@ -243,8 +255,9 @@ class _IdleView extends StatelessWidget {
 
 class _RecordingView extends StatelessWidget {
   final int countdown;
+  final double amplitude;
   final VoidCallback onCancel;
-  const _RecordingView({required this.countdown, required this.onCancel});
+  const _RecordingView({required this.countdown, required this.amplitude, required this.onCancel});
 
   @override
   Widget build(BuildContext context) {
@@ -285,7 +298,9 @@ class _RecordingView extends StatelessWidget {
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary)),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
+        _AmplitudeBar(amplitude: amplitude),
+        const SizedBox(height: 8),
         TextButton(
           onPressed: onCancel,
           child: const Text('취소',
@@ -445,6 +460,49 @@ class _SilentView extends StatelessWidget {
               style: TextStyle(color: AppColors.accent, fontSize: 15)),
         ),
       ],
+    );
+  }
+}
+
+class _AmplitudeBar extends StatelessWidget {
+  final double amplitude; // dBFS, typically -60~0
+  const _AmplitudeBar({required this.amplitude});
+
+  @override
+  Widget build(BuildContext context) {
+    // -60 dBFS = 0.0, -10 dBFS = 1.0
+    final level = ((amplitude + 60) / 50).clamp(0.0, 1.0);
+    final Color barColor;
+    final String label;
+    if (level > 0.5) {
+      barColor = AppColors.accent;
+      label = '소리 감지 중';
+    } else if (level > 0.2) {
+      barColor = const Color(0xFFFFCC44);
+      label = '소리가 작아요';
+    } else {
+      barColor = AppColors.danger;
+      label = '소리가 안 들려요';
+    }
+
+    return SizedBox(
+      width: 220,
+      child: Column(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: level,
+              minHeight: 6,
+              backgroundColor: AppColors.surface2,
+              valueColor: AlwaysStoppedAnimation(barColor),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(label,
+              style: TextStyle(fontSize: 12, color: barColor)),
+        ],
+      ),
     );
   }
 }
