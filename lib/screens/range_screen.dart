@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../db/database.dart';
 import '../models/song.dart';
 import '../services/pitch_service.dart';
+import '../services/preferences_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/help_sheet.dart';
 
@@ -25,6 +26,7 @@ class RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
   String _overallLow = '';
   String _overallHigh = '';
   List<Song> _songs = [];
+  String _preferredBrand = 'tj';
 
   _MeasurePhase _phase = _MeasurePhase.idle;
   String _currentNote = '';
@@ -51,12 +53,16 @@ class RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _load() async {
-    final records = await _db.getUserRangeRecords();
-    final songs = await _db.getAll();
+    final results = await Future.wait([
+      _db.getUserRangeRecords(),
+      _db.getAll(),
+      PreferencesService.getPreferredBrand(),
+    ]);
     if (!mounted) return;
     setState(() {
-      _records = records;
-      _songs = songs;
+      _records = results[0] as List<Map<String, dynamic>>;
+      _songs = results[1] as List<Song>;
+      _preferredBrand = results[2] as String;
       _computeOverall();
     });
   }
@@ -229,6 +235,7 @@ class RangeScreenState extends State<RangeScreen> with WidgetsBindingObserver {
                         songs: _songs,
                         myLow: _overallLow,
                         myHigh: _overallHigh,
+                        preferredBrand: _preferredBrand,
                       ),
                     ],
                     if (_records.isNotEmpty) ...[
@@ -1002,15 +1009,19 @@ class _SongKeyMap extends StatefulWidget {
   final List<Song> songs;
   final String myLow;
   final String myHigh;
-  const _SongKeyMap(
-      {required this.songs, required this.myLow, required this.myHigh});
+  final String preferredBrand;
+  const _SongKeyMap({
+    required this.songs,
+    required this.myLow,
+    required this.myHigh,
+    required this.preferredBrand,
+  });
 
   @override
   State<_SongKeyMap> createState() => _SongKeyMapState();
 }
 
 class _SongKeyMapState extends State<_SongKeyMap> {
-  String _brand = 'tj';
   bool _showAll = false;
   static const _pageSize = 5;
 
@@ -1047,12 +1058,13 @@ class _SongKeyMapState extends State<_SongKeyMap> {
 
     // 각 곡의 midi + color 미리 계산
     final songData = withKey.map((s) {
-      final offset = s.keyOffsetFor(_brand);
+      final offset = s.keyOffsetFor(widget.preferredBrand);
+      final origMidi = PitchService.origKeyToMidi(s.origKey, 0);
       final midi = PitchService.origKeyToMidi(s.origKey, offset);
       final color = _dotColor(midi);
       final label =
           '${s.origKey}${offset == 0 ? '' : (offset > 0 ? '+$offset' : '$offset')}';
-      return (song: s, midi: midi, color: color, label: label);
+      return (song: s, origMidi: origMidi, midi: midi, color: color, label: label, hasOffset: offset != 0);
     }).toList();
 
     // 같은 MIDI 위치에 있는 곡들 그룹핑 (스택용)
@@ -1077,7 +1089,7 @@ class _SongKeyMapState extends State<_SongKeyMap> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 헤더 + 브랜드 선택
+          // 헤더
           Row(
             children: [
               const Text('내 곡 키 위치',
@@ -1086,30 +1098,9 @@ class _SongKeyMapState extends State<_SongKeyMap> {
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary)),
               const Spacer(),
-              ...Song.brands.map((b) {
-                final selected = _brand == b;
-                return GestureDetector(
-                  onTap: () => setState(() {
-                    _brand = b;
-                    _showAll = false;
-                  }),
-                  child: Container(
-                    margin: const EdgeInsets.only(left: 6),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: selected ? AppColors.accent : AppColors.surface2,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(Song.brandLabels[b]!,
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color:
-                                selected ? AppColors.bg : AppColors.textMuted)),
-                  ),
-                );
-              }),
+              Text(Song.brandLabels[widget.preferredBrand]!,
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textMuted)),
             ],
           ),
           const SizedBox(height: 16),
@@ -1266,6 +1257,8 @@ class _SongKeyMapState extends State<_SongKeyMap> {
               return Column(
                 children: [
                   ...visible.map((d) {
+                    final origDotX =
+                        _frac(d.origMidi.clamp(_vizMin, _vizMax)) * axisW;
                     final dotX =
                         _frac(d.midi.clamp(_vizMin, _vizMax)) * axisW;
                     return Padding(
@@ -1288,6 +1281,24 @@ class _SongKeyMapState extends State<_SongKeyMap> {
                             child: Stack(
                               children: [
                                 const Positioned.fill(child: SizedBox()),
+                                // 원키 위치 (hollow, 오프셋 있을 때만)
+                                if (d.hasOffset)
+                                  Positioned(
+                                    left: (origDotX - 5).clamp(0.0, axisW - 10),
+                                    top: 5,
+                                    child: Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                            color: AppColors.textMuted
+                                                .withOpacity(0.45),
+                                            width: 1.5),
+                                      ),
+                                    ),
+                                  ),
+                                // 조절키 위치 (filled)
                                 Positioned(
                                   left: (dotX - 6).clamp(0.0, axisW - 12),
                                   top: 4,

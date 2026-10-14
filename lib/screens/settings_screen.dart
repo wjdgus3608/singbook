@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../db/database.dart';
+import '../models/song.dart';
+import '../services/preferences_service.dart';
 import '../theme/app_theme.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -13,6 +15,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _db = DatabaseHelper();
   Map<String, int> _tags = {};
+  String _preferredBrand = 'tj';
   bool _loading = true;
 
   @override
@@ -22,9 +25,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _load() async {
-    final tags = await _db.getAllTags();
+    final results = await Future.wait([
+      _db.getAllTags(),
+      PreferencesService.getPreferredBrand(),
+    ]);
     setState(() {
-      _tags = tags;
+      _tags = results[0] as Map<String, int>;
+      _preferredBrand = results[1] as String;
       _loading = false;
     });
   }
@@ -167,9 +174,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Tag section
+                          // Device preference section
                           const Padding(
                             padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
+                            child: Text('기기 설정',
+                                style: TextStyle(
+                                    fontSize: 12, color: AppColors.textMuted)),
+                          ),
+                          _Card(children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('주로 사용하는 기기',
+                                      style: TextStyle(
+                                          fontSize: 15,
+                                          color: AppColors.textPrimary)),
+                                  const SizedBox(height: 4),
+                                  const Text('음역대 탭에서 키 위치 점을 계산할 때 사용해요',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.textMuted)),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: Song.brands.map((b) {
+                                      final selected = _preferredBrand == b;
+                                      return GestureDetector(
+                                        onTap: () async {
+                                          await PreferencesService.setPreferredBrand(b);
+                                          setState(() => _preferredBrand = b);
+                                        },
+                                        child: Container(
+                                          margin: const EdgeInsets.only(right: 8),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 16, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: selected
+                                                ? AppColors.accent
+                                                : AppColors.surface2,
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Text(Song.brandLabels[b]!,
+                                              style: TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: selected
+                                                      ? AppColors.bg
+                                                      : AppColors.textMuted)),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ]),
+                          // Tag section
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(20, 24, 20, 8),
                             child: Text('태그 관리',
                                 style: TextStyle(
                                     fontSize: 12, color: AppColors.textMuted)),
