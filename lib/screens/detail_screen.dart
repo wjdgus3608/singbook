@@ -19,6 +19,7 @@ class _DetailScreenState extends State<DetailScreen> {
   late List<String> _tags;
   late TextEditingController _memoCtrl;
   List<String> _availableTags = [];
+  String _selectedBrand = 'tj';
 
   static const _noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 
@@ -220,17 +221,55 @@ class _DetailScreenState extends State<DetailScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('내 키',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: AppColors.textSecondary)),
-                            const SizedBox(height: 12),
-                            ...Song.brands.map((brand) => _BrandRow(
-                                  label: Song.brandLabels[brand]!,
-                                  value: _keyOffsets[brand] ?? 0,
-                                  onChanged: (v) =>
-                                      setState(() => _keyOffsets[brand] = v),
-                                )),
+                            Row(
+                              children: [
+                                const Text('내 키',
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        color: AppColors.textSecondary)),
+                                const Spacer(),
+                                ...Song.brands.map((b) {
+                                  final selected = _selectedBrand == b;
+                                  final hasValue = (_keyOffsets[b] ?? 0) != 0;
+                                  return GestureDetector(
+                                    onTap: () => setState(() => _selectedBrand = b),
+                                    child: Container(
+                                      margin: const EdgeInsets.only(left: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: selected
+                                            ? AppColors.accent
+                                            : AppColors.surface2,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: hasValue && !selected
+                                            ? Border.all(
+                                                color: AppColors.accent
+                                                    .withOpacity(0.4),
+                                                width: 1)
+                                            : null,
+                                      ),
+                                      child: Text(Song.brandLabels[b]!,
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: selected
+                                                  ? AppColors.bg
+                                                  : hasValue
+                                                      ? AppColors.accentLight
+                                                      : AppColors.textMuted)),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            _BrandRow(
+                              label: Song.brandLabels[_selectedBrand]!,
+                              value: _keyOffsets[_selectedBrand] ?? 0,
+                              onChanged: (v) =>
+                                  setState(() => _keyOffsets[_selectedBrand] = v),
+                            ),
                           ],
                         ),
                       ),
