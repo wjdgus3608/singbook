@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
@@ -10,7 +11,7 @@ class AcrResult {
   final String title;
   final String artist;
   final String? albumArt;
-  final int? spotifyKey; // 0-11 or null
+  final int? spotifyKey;
 
   const AcrResult({
     required this.title,
@@ -18,6 +19,14 @@ class AcrResult {
     this.albumArt,
     this.spotifyKey,
   });
+}
+
+enum AcrFailReason { silent, noMatch, apiError }
+
+class AcrFailure {
+  final AcrFailReason reason;
+  final String? message;
+  const AcrFailure(this.reason, [this.message]);
 }
 
 class AcrCloudService {
@@ -28,6 +37,11 @@ class AcrCloudService {
   static String get _host => ApiKeys.acrHost;
   static String get _accessKey => ApiKeys.acrAccessKey;
   static String get _accessSecret => ApiKeys.acrAccessSecret;
+
+  // WAV header = 44 bytes; 16kHz 16bit mono 10s = ~320KB
+  // If PCM amplitude (post-header) is very low, audio was silent
+  static const _silenceThreshold = 800; // out of 32768 max
+  static const _wavHeaderBytes = 44;
 
   final _recorder = AudioRecorder();
   final _dio = Dio();
@@ -44,19 +58,37 @@ class AcrCloudService {
     );
   }
 
+  // Returns AcrResult on success, throws AcrFailure on failure
   Future<AcrResult?> stopAndRecognize() async {
     await _recorder.stop();
-    if (_recordPath == null) return null;
+    if (_recordPath == null) throw const AcrFailure(AcrFailReason.silent);
 
     final file = File(_recordPath!);
-    if (!file.existsSync()) return null;
+    if (!file.existsSync()) throw const AcrFailure(AcrFailReason.silent);
 
     final bytes = await file.readAsBytes();
+    if (_isSilent(bytes)) throw const AcrFailure(AcrFailReason.silent);
+
     return _identify(bytes);
   }
 
   Future<void> cancelRecording() async {
     await _recorder.stop();
+  }
+
+  bool _isSilent(Uint8List bytes) {
+    if (bytes.length <= _wavHeaderBytes) return true;
+    final pcm = bytes.buffer.asInt16List(_wavHeaderBytes);
+    if (pcm.isEmpty) return true;
+    // sample ~2000 frames spread across recording
+    final step = (pcm.length / 2000).ceil().clamp(1, pcm.length);
+    double sum = 0;
+    int count = 0;
+    for (int i = 0; i < pcm.length; i += step) {
+      sum += pcm[i].abs();
+      count++;
+    }
+    return (sum / count) < _silenceThreshold;
   }
 
   Future<AcrResult?> _identify(List<int> bytes) async {
@@ -98,11 +130,11 @@ class AcrCloudService {
     final codeRaw = status['code'];
     final code = codeRaw is int ? codeRaw : int.tryParse(codeRaw.toString()) ?? -1;
     final msg = status['msg']?.toString() ?? 'unknown';
-    if (code == 1001) return null; // no match
-    if (code != 0) throw Exception('ACR $code: $msg');
+    if (code == 1001) throw const AcrFailure(AcrFailReason.noMatch);
+    if (code != 0) throw AcrFailure(AcrFailReason.apiError, 'ACR $code: $msg');
 
     final musics = data['metadata']?['music'] as List?;
-    if (musics == null || musics.isEmpty) return null;
+    if (musics == null || musics.isEmpty) throw const AcrFailure(AcrFailReason.noMatch);
 
     final music = musics[0];
     final title = music['title'] as String;

@@ -471,7 +471,7 @@ class _RangeBar extends StatelessWidget {
 
 // ── 측정 섹션 ────────────────────────────────────────────────────────────────
 
-class _MeasureSection extends StatelessWidget {
+class _MeasureSection extends StatefulWidget {
   final _MeasurePhase phase;
   final String currentNote;
   final String sessionLow;
@@ -499,6 +499,33 @@ class _MeasureSection extends StatelessWidget {
   });
 
   @override
+  State<_MeasureSection> createState() => _MeasureSectionState();
+}
+
+class _MeasureSectionState extends State<_MeasureSection>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseCtrl;
+  late final Animation<double> _pulseAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _pulseAnim = Tween(begin: 0.4, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
@@ -507,7 +534,7 @@ class _MeasureSection extends StatelessWidget {
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: switch (phase) {
+      child: switch (widget.phase) {
         _MeasurePhase.idle => _buildIdle(),
         _MeasurePhase.measuring => _buildMeasuring(),
         _MeasurePhase.result => _buildResult(),
@@ -535,7 +562,7 @@ class _MeasureSection extends StatelessWidget {
           width: 160,
           height: 42,
           child: ElevatedButton.icon(
-            onPressed: onStart,
+            onPressed: widget.onStart,
             icon: const Icon(Icons.mic, size: 16),
             label: const Text('측정 시작',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
@@ -552,30 +579,47 @@ class _MeasureSection extends StatelessWidget {
   }
 
   Widget _buildMeasuring() {
-    final hasRange = sessionLow.isNotEmpty;
-    final pulsing = currentNote.isNotEmpty;
+    final hasRange = widget.sessionLow.isNotEmpty;
+    final detected = widget.currentNote.isNotEmpty;
     return Column(
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: pulsing ? AppColors.accent : AppColors.textMuted,
+        // 녹음 중 표시 (펄스 + 현재 음)
+        AnimatedBuilder(
+          animation: _pulseAnim,
+          builder: (_, __) => Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Opacity(
+                opacity: _pulseAnim.value,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.danger,
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              pulsing ? currentNote : '감지 중...',
-              style: TextStyle(
-                  fontSize: 13,
-                  color:
-                      pulsing ? AppColors.accent : AppColors.textMuted),
-            ),
-          ],
+              const SizedBox(width: 6),
+              const Text(
+                '녹음 중',
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textMuted),
+              ),
+              if (detected) ...[
+                const Text('  •  ',
+                    style: TextStyle(
+                        fontSize: 12, color: AppColors.textMuted)),
+                Text(
+                  widget.currentNote,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.accent),
+                ),
+              ],
+            ],
+          ),
         ),
         const SizedBox(height: 14),
         Container(
@@ -591,14 +635,14 @@ class _MeasureSection extends StatelessWidget {
               Column(
                 children: [
                   Text(
-                    sessionLow.isEmpty ? '–' : sessionLow,
+                    widget.sessionLow.isEmpty ? '–' : widget.sessionLow,
                     style: AppTheme.mono(28, FontWeight.w900,
-                        sessionLow.isEmpty
+                        widget.sessionLow.isEmpty
                             ? AppColors.textMuted
                             : const Color(0xFF6BB5FF)),
                   ),
-                  if (sessionLow.isNotEmpty)
-                    Text(PitchService.noteToSolfege(sessionLow),
+                  if (widget.sessionLow.isNotEmpty)
+                    Text(PitchService.noteToSolfege(widget.sessionLow),
                         style: const TextStyle(
                             fontSize: 11, color: AppColors.textMuted)),
                   const Text('최저음',
@@ -615,14 +659,14 @@ class _MeasureSection extends StatelessWidget {
               Column(
                 children: [
                   Text(
-                    sessionHigh.isEmpty ? '–' : sessionHigh,
+                    widget.sessionHigh.isEmpty ? '–' : widget.sessionHigh,
                     style: AppTheme.mono(28, FontWeight.w900,
-                        sessionHigh.isEmpty
+                        widget.sessionHigh.isEmpty
                             ? AppColors.textMuted
                             : AppColors.accent),
                   ),
-                  if (sessionHigh.isNotEmpty)
-                    Text(PitchService.noteToSolfege(sessionHigh),
+                  if (widget.sessionHigh.isNotEmpty)
+                    Text(PitchService.noteToSolfege(widget.sessionHigh),
                         style: const TextStyle(
                             fontSize: 11, color: AppColors.textMuted)),
                   const Text('최고음',
@@ -635,11 +679,11 @@ class _MeasureSection extends StatelessWidget {
         ),
         if (hasRange) ...[
           const SizedBox(height: 14),
-          _RangeBar(low: sessionLow, high: sessionHigh),
+          _RangeBar(low: widget.sessionLow, high: widget.sessionHigh),
           const SizedBox(height: 6),
           Text(
             PitchService.spanLabel(
-                PitchService.rangeSpan(sessionLow, sessionHigh)),
+                PitchService.rangeSpan(widget.sessionLow, widget.sessionHigh)),
             style: const TextStyle(
                 fontSize: 12, color: AppColors.textMuted),
           ),
@@ -650,13 +694,13 @@ class _MeasureSection extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             TextButton(
-              onPressed: onCancel,
+              onPressed: widget.onCancel,
               child: const Text('취소',
                   style: TextStyle(color: AppColors.textMuted)),
             ),
             const SizedBox(width: 12),
             ElevatedButton(
-              onPressed: hasRange ? onStop : null,
+              onPressed: hasRange ? widget.onStop : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.accent,
                 foregroundColor: AppColors.bg,
@@ -676,7 +720,7 @@ class _MeasureSection extends StatelessWidget {
   }
 
   Widget _buildResult() {
-    final span = PitchService.rangeSpan(resultLow, resultHigh);
+    final span = PitchService.rangeSpan(widget.resultLow, widget.resultHigh);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -687,7 +731,7 @@ class _MeasureSection extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _NoteBox(note: resultLow, color: const Color(0xFF6BB5FF)),
+            _NoteBox(note: widget.resultLow, color: const Color(0xFF6BB5FF)),
             Expanded(
               child: Column(
                 children: [
@@ -701,17 +745,17 @@ class _MeasureSection extends StatelessWidget {
                 ],
               ),
             ),
-            _NoteBox(note: resultHigh, color: AppColors.accent),
+            _NoteBox(note: widget.resultHigh, color: AppColors.accent),
           ],
         ),
         const SizedBox(height: 14),
-        _RangeBar(low: resultLow, high: resultHigh),
+        _RangeBar(low: widget.resultLow, high: widget.resultHigh),
         const SizedBox(height: 20),
         Row(
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: onRemeasure,
+                onPressed: widget.onRemeasure,
                 icon: const Icon(Icons.refresh, size: 16),
                 label: const Text('다시 측정',
                     style: TextStyle(fontWeight: FontWeight.w600)),
@@ -727,7 +771,7 @@ class _MeasureSection extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: ElevatedButton.icon(
-                onPressed: onSave,
+                onPressed: widget.onSave,
                 icon: const Icon(Icons.save_outlined, size: 16),
                 label: const Text('저장',
                     style: TextStyle(fontWeight: FontWeight.w700)),
@@ -968,24 +1012,32 @@ class _DayGroup extends StatelessWidget {
                           fontFeatures: [FontFeature.tabularFigures()])),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(low,
-                            style: AppTheme.mono(13, FontWeight.w700,
-                                const Color(0xFF6BB5FF))),
-                        const Text('  ~  ',
-                            style: TextStyle(
-                                fontSize: 12, color: AppColors.textMuted)),
-                        Text(high,
-                            style: AppTheme.mono(
-                                13, FontWeight.w700, AppColors.accent)),
-                        const SizedBox(width: 6),
-                        Text('$span반음',
-                            style: const TextStyle(
-                                fontSize: 11, color: AppColors.textMuted)),
+                        Row(
+                          children: [
+                            Text(low,
+                                style: AppTheme.mono(13, FontWeight.w700,
+                                    const Color(0xFF6BB5FF))),
+                            const Text('  ~  ',
+                                style: TextStyle(
+                                    fontSize: 12, color: AppColors.textMuted)),
+                            Text(high,
+                                style: AppTheme.mono(
+                                    13, FontWeight.w700, AppColors.accent)),
+                            const SizedBox(width: 6),
+                            Text('$span반음',
+                                style: const TextStyle(
+                                    fontSize: 11, color: AppColors.textMuted)),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        _MiniRangeBar(low: low, high: high),
                       ],
                     ),
                   ),
+                  const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.delete_outline,
                         color: AppColors.textMuted, size: 16),
@@ -1000,6 +1052,58 @@ class _DayGroup extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ── 기록 행 미니 범위 바 ────────────────────────────────────────────────────────
+
+class _MiniRangeBar extends StatelessWidget {
+  final String low;
+  final String high;
+  const _MiniRangeBar({required this.low, required this.high});
+
+  static const _vizMin = 36;
+  static const _vizMax = 84;
+  static const _vizSpan = _vizMax - _vizMin;
+
+  double _frac(int midi) => ((midi - _vizMin) / _vizSpan).clamp(0.0, 1.0);
+
+  @override
+  Widget build(BuildContext context) {
+    final lMidi = PitchService.noteToMidi(low).clamp(_vizMin, _vizMax);
+    final hMidi = PitchService.noteToMidi(high).clamp(_vizMin, _vizMax);
+    return LayoutBuilder(builder: (_, constraints) {
+      final w = constraints.maxWidth;
+      return SizedBox(
+        height: 6,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surface2,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+            Positioned(
+              left: _frac(lMidi) * w,
+              width: max(4.0, (_frac(hMidi) - _frac(lMidi)) * w),
+              top: 0,
+              bottom: 0,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF6BB5FF), AppColors.accent],
+                  ),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
   }
 }
 
@@ -1022,14 +1126,17 @@ class _SongKeyMap extends StatefulWidget {
 }
 
 class _SongKeyMapState extends State<_SongKeyMap> {
-  bool _showAll = false;
-  static const _pageSize = 5;
-
   static const _vizMin = 36; // C2
   static const _vizMax = 84; // C6
   static const _vizSpan = _vizMax - _vizMin;
   static const _octaveLabels = ['C2', 'C3', 'C4', 'C5', 'C6'];
   static const _octaveMidi = [36, 48, 60, 72, 84];
+  static const _rowH = 28.0;
+  static const _nameW = 80.0;
+  static const _pageSize = 6;
+
+  bool _showAll = false;
+  Song? _selected;
 
   double _frac(int midi) =>
       ((midi - _vizMin) / _vizSpan).clamp(0.0, 1.0);
@@ -1049,35 +1156,21 @@ class _SongKeyMapState extends State<_SongKeyMap> {
 
   @override
   Widget build(BuildContext context) {
-    final withKey = widget.songs
-        .where((s) => s.origKey.isNotEmpty)
-        .toList();
-    final noKey = widget.songs
-        .where((s) => s.origKey.isEmpty)
-        .toList();
+    final withKey = widget.songs.where((s) => s.origKey.isNotEmpty).toList();
+    final noKey = widget.songs.where((s) => s.origKey.isEmpty).toList();
 
-    // 각 곡의 midi + color 미리 계산
-    final songData = withKey.map((s) {
+    final allData = withKey.map((s) {
       final offset = s.keyOffsetFor(widget.preferredBrand);
       final origMidi = PitchService.origKeyToMidi(s.origKey, 0);
       final midi = PitchService.origKeyToMidi(s.origKey, offset);
       final color = _dotColor(midi);
       final label =
           '${s.origKey}${offset == 0 ? '' : (offset > 0 ? '+$offset' : '$offset')}';
-      return (song: s, origMidi: origMidi, midi: midi, color: color, label: label, hasOffset: offset != 0);
+      return (song: s, origMidi: origMidi, midi: midi, color: color, label: label, hasOffset: offset != 0, offset: offset);
     }).toList();
 
-    // 같은 MIDI 위치에 있는 곡들 그룹핑 (스택용)
-    final Map<int, List<Color>> stackMap = {};
-    for (final d in songData) {
-      final pos = d.midi.clamp(_vizMin, _vizMax);
-      stackMap.putIfAbsent(pos, () => []).add(d.color);
-    }
-
-    final visible = _showAll
-        ? songData
-        : songData.take(_pageSize).toList();
-    final hiddenCount = songData.length - _pageSize;
+    final visible = _showAll ? allData : allData.take(_pageSize).toList();
+    final hiddenCount = allData.length - _pageSize;
 
     return Container(
       width: double.infinity,
@@ -1103,256 +1196,225 @@ class _SongKeyMapState extends State<_SongKeyMap> {
                       fontSize: 12, color: AppColors.textMuted)),
             ],
           ),
-          const SizedBox(height: 16),
-          // 오버뷰 축 바 (모든 곡 점 표시 + 스택)
-          LayoutBuilder(builder: (_, constraints) {
-            final w = constraints.maxWidth;
-            // 최대 스택 높이 계산 (최대 3단)
-            final maxStack =
-                stackMap.values.fold(0, (m, v) => max(m, v.length));
-            final barH = max(28.0, 12.0 + min(maxStack, 3) * 12.0);
+          const SizedBox(height: 14),
 
-            return Column(
-              children: [
-                SizedBox(
-                  height: barH,
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.surface2,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                        ),
-                      ),
-                      // 옥타브 경계선
-                      for (final m in [48, 60, 72])
-                        Positioned(
-                          left: _frac(m) * w - 0.5,
-                          top: 0,
-                          bottom: 0,
-                          width: 1,
-                          child: Container(color: AppColors.border),
-                        ),
-                      // 내 음역대 배경
-                      if (widget.myLow.isNotEmpty && widget.myHigh.isNotEmpty)
-                        Positioned(
-                          left: _frac(PitchService.noteToMidi(widget.myLow)
-                                  .clamp(_vizMin, _vizMax)) *
-                              w,
-                          width: max(
-                            4.0,
-                            (_frac(PitchService.noteToMidi(widget.myHigh)
-                                            .clamp(_vizMin, _vizMax)) -
-                                        _frac(
-                                            PitchService.noteToMidi(widget.myLow)
-                                                .clamp(_vizMin, _vizMax))) *
-                                    w,
-                          ),
-                          top: 0,
-                          bottom: 0,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: AppColors.accent.withOpacity(0.18),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                        ),
-                      // 곡 점들 (스택)
-                      for (final entry in stackMap.entries)
-                        ...entry.value
-                            .take(3)
-                            .toList()
-                            .asMap()
-                            .entries
-                            .map((e) {
-                          final stackIdx = e.key;
-                          final color = e.value;
-                          final dotX = (_frac(entry.key) * w - 5)
-                              .clamp(0.0, w - 10);
-                          return Positioned(
-                            left: dotX,
-                            bottom: 4.0 + stackIdx * 12.0,
-                            child: Container(
-                              width: 10,
-                              height: 10,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: color,
-                                boxShadow: [
-                                  BoxShadow(
-                                      color: color.withOpacity(0.6),
-                                      blurRadius: 4),
-                                ],
-                              ),
-                            ),
-                          );
-                        }),
-                      // 3개 초과 시 "+N" 뱃지
-                      for (final entry
-                          in stackMap.entries.where((e) => e.value.length > 3))
-                        Positioned(
-                          left: (_frac(entry.key) * w + 6)
-                              .clamp(0.0, w - 20),
-                          bottom: 4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 3, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              '+${entry.value.length - 3}',
-                              style: const TextStyle(
-                                  fontSize: 8, color: AppColors.textMuted),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: List.generate(_octaveMidi.length, (i) {
-                    return Expanded(
-                      flex: i < _octaveMidi.length - 1
-                          ? ((_octaveMidi[i + 1] - _octaveMidi[i]) * 100)
-                              .round()
-                          : 1,
-                      child: Align(
-                        alignment: i == _octaveMidi.length - 1
-                            ? Alignment.centerRight
-                            : Alignment.centerLeft,
-                        child: Text(_octaveLabels[i],
-                            style: const TextStyle(
-                                fontSize: 9, color: AppColors.textMuted)),
-                      ),
-                    );
-                  }),
-                ),
-              ],
-            );
-          }),
-          const SizedBox(height: 12),
-          // 곡 없음
           if (withKey.isEmpty && noKey.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Center(
                 child: Text('등록된 곡이 없어요',
-                    style:
-                        TextStyle(fontSize: 13, color: AppColors.textMuted)),
+                    style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
               ),
             ),
-          // 원키 있는 곡 목록 (접기/펼치기)
+
           if (withKey.isNotEmpty)
             LayoutBuilder(builder: (_, constraints) {
-              const nameW = 96.0;
-              const labelW = 48.0;
-              const gap = 8.0;
-              final axisW =
-                  constraints.maxWidth - nameW - labelW - gap * 2;
+              final plotW = constraints.maxWidth - _nameW - 8;
+              final lMidi = widget.myLow.isNotEmpty
+                  ? PitchService.noteToMidi(widget.myLow).clamp(_vizMin, _vizMax)
+                  : -1;
+              final hMidi = widget.myHigh.isNotEmpty
+                  ? PitchService.noteToMidi(widget.myHigh).clamp(_vizMin, _vizMax)
+                  : -1;
+
               return Column(
                 children: [
-                  ...visible.map((d) {
-                    final origDotX =
-                        _frac(d.origMidi.clamp(_vizMin, _vizMax)) * axisW;
-                    final dotX =
-                        _frac(d.midi.clamp(_vizMin, _vizMax)) * axisW;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: nameW,
-                            child: Text(d.song.title,
-                                style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis),
-                          ),
-                          const SizedBox(width: gap),
-                          SizedBox(
-                            width: axisW,
-                            height: 20,
-                            child: Stack(
-                              children: [
-                                const Positioned.fill(child: SizedBox()),
-                                // 원키 위치 (hollow, 오프셋 있을 때만)
-                                if (d.hasOffset)
-                                  Positioned(
-                                    left: (origDotX - 5).clamp(0.0, axisW - 10),
-                                    top: 5,
-                                    child: Container(
-                                      width: 10,
-                                      height: 10,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                            color: AppColors.textMuted
-                                                .withOpacity(0.45),
-                                            width: 1.5),
-                                      ),
-                                    ),
-                                  ),
-                                // 조절키 위치 (filled)
-                                Positioned(
-                                  left: (dotX - 6).clamp(0.0, axisW - 12),
-                                  top: 4,
-                                  child: Container(
-                                    width: 12,
-                                    height: 12,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: d.color,
-                                      boxShadow: [
-                                        BoxShadow(
-                                            color: d.color.withOpacity(0.5),
-                                            blurRadius: 6),
-                                      ],
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Y축 레이블 (곡명)
+                      SizedBox(
+                        width: _nameW,
+                        child: Column(
+                          children: [
+                            // 상단 여백 (X축 상단 여백 맞춤)
+                            const SizedBox(height: 8),
+                            ...visible.map((d) {
+                              final isSelected = _selected?.id == d.song.id;
+                              return GestureDetector(
+                                onTap: () => setState(() =>
+                                    _selected = isSelected ? null : d.song),
+                                child: SizedBox(
+                                  height: _rowH,
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      d.song.title,
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: isSelected
+                                              ? AppColors.accent
+                                              : AppColors.textSecondary,
+                                          fontWeight: isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.normal),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: gap),
-                          SizedBox(
-                            width: labelW,
-                            child: Text(d.label,
-                                style: AppTheme.mono(
-                                    11, FontWeight.w600, d.color),
-                                textAlign: TextAlign.right),
-                          ),
-                        ],
+                              );
+                            }),
+                          ],
+                        ),
                       ),
-                    );
-                  }),
-                  // 더 보기 / 접기 버튼
-                  if (songData.length > _pageSize)
+                      const SizedBox(width: 8),
+                      // 플롯 영역
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            const Positioned.fill(child: SizedBox()),
+                            // X축 전체 배경 및 그리드
+                            Positioned(
+                              top: 8,
+                              left: 0,
+                              right: 0,
+                              height: visible.length * _rowH,
+                              child: Stack(
+                                children: [
+                                  // 내 음역대 배경 밴드
+                                  if (lMidi >= 0 && hMidi >= 0)
+                                    Positioned(
+                                      left: _frac(lMidi) * plotW,
+                                      width: max(4.0, (_frac(hMidi) - _frac(lMidi)) * plotW),
+                                      top: 0,
+                                      bottom: 0,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: AppColors.accent.withOpacity(0.10),
+                                          borderRadius: BorderRadius.circular(3),
+                                        ),
+                                      ),
+                                    ),
+                                  // 옥타브 경계선 (C3, C4, C5)
+                                  for (final m in [48, 60, 72])
+                                    Positioned(
+                                      left: _frac(m) * plotW - 0.5,
+                                      top: 0,
+                                      bottom: 0,
+                                      width: 1,
+                                      child: Container(color: AppColors.border),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            // 곡별 행
+                            Positioned(
+                              top: 8,
+                              left: 0,
+                              right: 0,
+                              child: Column(
+                                children: visible.map((d) {
+                                  final origDotX = _frac(d.origMidi.clamp(_vizMin, _vizMax)) * plotW;
+                                  final dotX = _frac(d.midi.clamp(_vizMin, _vizMax)) * plotW;
+                                  final isSelected = _selected?.id == d.song.id;
+                                  return GestureDetector(
+                                    onTap: () => setState(() =>
+                                        _selected = isSelected ? null : d.song),
+                                    child: SizedBox(
+                                      height: _rowH,
+                                      child: Stack(
+                                        children: [
+                                          const Positioned.fill(child: SizedBox()),
+                                          // 트랙 선
+                                          Positioned(
+                                            left: 0,
+                                            right: 0,
+                                            top: _rowH / 2 - 0.5,
+                                            height: 1,
+                                            child: Container(
+                                              color: AppColors.border.withOpacity(0.5),
+                                            ),
+                                          ),
+                                          // 원키 hollow (오프셋 있을 때)
+                                          if (d.hasOffset)
+                                            Positioned(
+                                              left: (origDotX - 4).clamp(0.0, plotW - 8),
+                                              top: _rowH / 2 - 4,
+                                              child: Container(
+                                                width: 8,
+                                                height: 8,
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                      color: AppColors.textMuted.withOpacity(0.4),
+                                                      width: 1.5),
+                                                ),
+                                              ),
+                                            ),
+                                          // 조절키 filled
+                                          Positioned(
+                                            left: (dotX - 5).clamp(0.0, plotW - 10),
+                                            top: _rowH / 2 - 5,
+                                            child: Container(
+                                              width: 10,
+                                              height: 10,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color: isSelected
+                                                    ? AppColors.accent
+                                                    : d.color,
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                      color: d.color.withOpacity(0.5),
+                                                      blurRadius: isSelected ? 8 : 4),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                            // X축 레이블
+                            Positioned(
+                              top: 8 + visible.length * _rowH + 4,
+                              left: 0,
+                              right: 0,
+                              child: Row(
+                                children: List.generate(_octaveMidi.length, (i) {
+                                  return Expanded(
+                                    flex: i < _octaveMidi.length - 1
+                                        ? ((_octaveMidi[i + 1] - _octaveMidi[i]) * 100).round()
+                                        : 1,
+                                    child: Align(
+                                      alignment: i == _octaveMidi.length - 1
+                                          ? Alignment.centerRight
+                                          : Alignment.centerLeft,
+                                      child: Text(_octaveLabels[i],
+                                          style: const TextStyle(
+                                              fontSize: 9, color: AppColors.textMuted)),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Stack 높이 확보 (곡 행 + X축 레이블)
+                  SizedBox(height: visible.length * _rowH + 8 + 16),
+                  // 더 보기 / 접기
+                  if (allData.length > _pageSize)
                     GestureDetector(
-                      onTap: () =>
-                          setState(() => _showAll = !_showAll),
+                      onTap: () => setState(() => _showAll = !_showAll),
                       child: Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              _showAll
-                                  ? '접기'
-                                  : '더 보기 $hiddenCount개',
+                              _showAll ? '접기' : '더 보기 $hiddenCount개',
                               style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textMuted),
+                                  fontSize: 12, color: AppColors.textMuted),
                             ),
                             Icon(
-                              _showAll
-                                  ? Icons.expand_less
-                                  : Icons.expand_more,
+                              _showAll ? Icons.expand_less : Icons.expand_more,
                               color: AppColors.textMuted,
                               size: 16,
                             ),
@@ -1360,9 +1422,56 @@ class _SongKeyMapState extends State<_SongKeyMap> {
                         ),
                       ),
                     ),
+                  // 선택된 곡 정보 패널
+                  const Divider(color: AppColors.border, height: 20),
+                  Builder(builder: (_) {
+                    if (_selected == null) {
+                      return const Center(
+                        child: Text('곡을 탭하면 상세 정보를 볼 수 있어요',
+                            style: TextStyle(
+                                fontSize: 12, color: AppColors.textMuted)),
+                      );
+                    }
+                    final s = _selected!;
+                    final offset = s.keyOffsetFor(widget.preferredBrand);
+                    final adjustedLabel =
+                        '${s.origKey}${offset == 0 ? '' : (offset > 0 ? ' +$offset' : ' $offset')}';
+                    final dt = DateTime.fromMillisecondsSinceEpoch(s.updatedAt);
+                    final dateStr =
+                        '${dt.year}.${dt.month.toString().padLeft(2, '0')}.${dt.day.toString().padLeft(2, '0')}';
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(s.title,
+                            style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary)),
+                        const SizedBox(height: 2),
+                        Text(s.artist,
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.textSecondary)),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            if (s.origKey.isNotEmpty) ...[
+                              _InfoChip(label: '원키', value: s.origKey),
+                              const SizedBox(width: 8),
+                              _InfoChip(
+                                  label: '${Song.brandLabels[widget.preferredBrand]}키',
+                                  value: adjustedLabel),
+                              const SizedBox(width: 8),
+                            ],
+                            _InfoChip(label: '추가', value: dateStr),
+                          ],
+                        ),
+                      ],
+                    );
+                  }),
                 ],
               );
             }),
+
           // 원키 미입력 구분선 + 목록
           if (noKey.isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -1374,8 +1483,7 @@ class _SongKeyMapState extends State<_SongKeyMap> {
                         color: AppColors.border,
                         margin: const EdgeInsets.only(right: 8))),
                 const Text('원키 미입력',
-                    style: TextStyle(
-                        fontSize: 11, color: AppColors.textMuted)),
+                    style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
                 Expanded(
                     child: Container(
                         height: 1,
@@ -1392,8 +1500,7 @@ class _SongKeyMapState extends State<_SongKeyMap> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Text('◌',
-                        style: TextStyle(
-                            fontSize: 14, color: AppColors.textMuted)),
+                        style: TextStyle(fontSize: 14, color: AppColors.textMuted)),
                     const SizedBox(width: 4),
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 120),
@@ -1408,6 +1515,35 @@ class _SongKeyMapState extends State<_SongKeyMap> {
               }).toList(),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final String label;
+  final String value;
+  const _InfoChip({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('$label  ',
+              style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary)),
         ],
       ),
     );

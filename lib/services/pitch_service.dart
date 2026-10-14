@@ -12,7 +12,7 @@ class PitchService {
   final _recorder = AudioRecorder();
 
   static const _sampleRate = 44100;
-  static const _bufferSize = 4096; // samples (= 8192 bytes for PCM16)
+  static const _bufferSize = 2048; // samples (= 4096 bytes for PCM16) — smaller = faster response
 
   final _detector = PitchDetector(
     audioSampleRate: _sampleRate.toDouble(),
@@ -56,9 +56,9 @@ class PitchService {
       _detector.getPitchFromIntBuffer(chunk).then((result) {
         _processing = false;
         if (!_active) return;
-        // 80Hz(E2) ~ 1200Hz(D6) 범위만 유효한 보컬로 처리
+        // 65Hz(C2) ~ 1400Hz(F6) 범위로 넓혀 더 많은 음 감지
         _ctrl?.add(
-          (result.pitched && result.pitch > 80 && result.pitch < 1200)
+          (result.pitched && result.pitch > 65 && result.pitch < 1400)
               ? result.pitch
               : null,
         );

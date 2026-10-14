@@ -8,7 +8,7 @@ import '../theme/app_theme.dart';
 import '../widgets/help_sheet.dart';
 import 'detail_screen.dart';
 
-enum _State { idle, recording, processing, result, error, noMatch }
+enum _State { idle, recording, processing, result, error, noMatch, silent }
 
 class RecognizeScreen extends StatefulWidget {
   const RecognizeScreen({super.key});
@@ -72,27 +72,35 @@ class _RecognizeScreenState extends State<RecognizeScreen>
     setState(() => _state = _State.processing);
     try {
       final result = await _acr.stopAndRecognize();
-      if (result == null) {
-        setState(() => _state = _State.noMatch);
-        return;
-      }
       // Enrich with Spotify album art
       Song? enriched;
       try {
-        final hits = await _spotify.search('${result.title} ${result.artist}');
+        final hits = await _spotify.search('${result!.title} ${result.artist}');
         if (hits.isNotEmpty) enriched = hits.first;
       } catch (_) {}
 
       final song = enriched ??
           Song(
             id: 'acr:${DateTime.now().millisecondsSinceEpoch}',
-            title: result.title,
+            title: result!.title,
             artist: result.artist,
           );
 
       setState(() {
         _song = song;
         _state = _State.result;
+      });
+    } on AcrFailure catch (f) {
+      setState(() {
+        switch (f.reason) {
+          case AcrFailReason.silent:
+            _state = _State.silent;
+          case AcrFailReason.noMatch:
+            _state = _State.noMatch;
+          case AcrFailReason.apiError:
+            _state = _State.error;
+            _errorMsg = f.message ?? '서버 오류가 발생했어요';
+        }
       });
     } catch (e) {
       setState(() {
@@ -186,6 +194,8 @@ class _RecognizeScreenState extends State<RecognizeScreen>
         return _ResultView(song: _song!, onAdd: _addToList, onReset: _reset);
       case _State.noMatch:
         return _NoMatchView(onRetry: _reset);
+      case _State.silent:
+        return _SilentView(onRetry: _reset);
       case _State.error:
         return _ErrorView(message: _errorMsg, onRetry: _reset);
     }
@@ -388,13 +398,44 @@ class _NoMatchView extends StatelessWidget {
       children: [
         const Icon(Icons.music_off, color: AppColors.textMuted, size: 56),
         const SizedBox(height: 20),
-        const Text('인식 실패',
+        const Text('곡을 찾지 못했어요',
             style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary)),
         const SizedBox(height: 8),
-        const Text('노래를 찾지 못했어요\n전주가 나올 때 다시 시도해보세요',
+        const Text('전주가 시작되는 순간에 탭하면\n인식률이 높아져요',
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+            textAlign: TextAlign.center),
+        const SizedBox(height: 24),
+        TextButton(
+          onPressed: onRetry,
+          child: const Text('다시 시도',
+              style: TextStyle(color: AppColors.accent, fontSize: 15)),
+        ),
+      ],
+    );
+  }
+}
+
+class _SilentView extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _SilentView({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.volume_off, color: AppColors.textMuted, size: 56),
+        const SizedBox(height: 20),
+        const Text('소리가 잘 안 들어간 것 같아요',
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary)),
+        const SizedBox(height: 8),
+        const Text('스피커에 더 가까이 대고\n볼륨을 높여서 다시 시도해보세요',
             style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
             textAlign: TextAlign.center),
         const SizedBox(height: 24),
