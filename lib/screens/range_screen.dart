@@ -1129,48 +1129,45 @@ class _SongKeyMapState extends State<_SongKeyMap> {
   static const _vizMin = 36; // C2
   static const _vizMax = 84; // C6
   static const _vizSpan = _vizMax - _vizMin;
-  static const _octaveLabels = ['C2', 'C3', 'C4', 'C5', 'C6'];
-  static const _octaveMidi = [36, 48, 60, 72, 84];
+  static const _chipW = 76.0;
+  static const _chipH = 22.0;
   static const _rowH = 28.0;
-  static const _nameW = 80.0;
-  static const _pageSize = 6;
+  static const _barH = 8.0;
+  static const _chipGap = 3.0;
 
-  bool _showAll = false;
   Song? _selected;
 
-  double _frac(int midi) =>
-      ((midi - _vizMin) / _vizSpan).clamp(0.0, 1.0);
+  double _frac(int midi) => ((midi - _vizMin) / _vizSpan).clamp(0.0, 1.0);
 
-  Color _dotColor(int midi) {
-    if (widget.myLow.isEmpty || widget.myHigh.isEmpty) {
-      return AppColors.textMuted;
-    }
+  Color _chipColor(int midi) {
+    if (widget.myLow.isEmpty || widget.myHigh.isEmpty) return AppColors.textMuted;
     final lo = PitchService.noteToMidi(widget.myLow);
     final hi = PitchService.noteToMidi(widget.myHigh);
     if (midi >= lo && midi <= hi) return AppColors.accent;
-    if ((midi - lo).abs() <= 3 || (midi - hi).abs() <= 3) {
-      return const Color(0xFFFFCC44);
-    }
+    if ((midi - lo).abs() <= 3 || (midi - hi).abs() <= 3) return const Color(0xFFFFCC44);
     return AppColors.danger;
+  }
+
+  List<int> _assignRows(List<double> chipXs) {
+    final rowRights = <double>[];
+    final assigned = List<int>.filled(chipXs.length, 0);
+    for (int i = 0; i < chipXs.length; i++) {
+      final left = chipXs[i];
+      int row = rowRights.indexWhere((r) => left >= r + _chipGap);
+      if (row < 0) {
+        row = rowRights.length;
+        rowRights.add(0);
+      }
+      assigned[i] = row;
+      rowRights[row] = left + _chipW;
+    }
+    return assigned;
   }
 
   @override
   Widget build(BuildContext context) {
     final withKey = widget.songs.where((s) => s.origKey.isNotEmpty).toList();
     final noKey = widget.songs.where((s) => s.origKey.isEmpty).toList();
-
-    final allData = withKey.map((s) {
-      final offset = s.keyOffsetFor(widget.preferredBrand);
-      final origMidi = PitchService.origKeyToMidi(s.origKey, 0);
-      final midi = PitchService.origKeyToMidi(s.origKey, offset);
-      final color = _dotColor(midi);
-      final label =
-          '${s.origKey}${offset == 0 ? '' : (offset > 0 ? '+$offset' : '$offset')}';
-      return (song: s, origMidi: origMidi, midi: midi, color: color, label: label, hasOffset: offset != 0, offset: offset);
-    }).toList();
-
-    final visible = _showAll ? allData : allData.take(_pageSize).toList();
-    final hiddenCount = allData.length - _pageSize;
 
     return Container(
       width: double.infinity,
@@ -1182,7 +1179,6 @@ class _SongKeyMapState extends State<_SongKeyMap> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 헤더
           Row(
             children: [
               const Text('내 곡 키 위치',
@@ -1192,24 +1188,20 @@ class _SongKeyMapState extends State<_SongKeyMap> {
                       color: AppColors.textPrimary)),
               const Spacer(),
               Text(Song.brandLabels[widget.preferredBrand]!,
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.textMuted)),
+                  style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
 
           if (withKey.isEmpty && noKey.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Center(
-                child: Text('등록된 곡이 없어요',
-                    style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
-              ),
+            const Center(
+              child: Text('등록된 곡이 없어요',
+                  style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
             ),
 
           if (withKey.isNotEmpty)
             LayoutBuilder(builder: (_, constraints) {
-              final plotW = constraints.maxWidth - _nameW - 8;
+              final W = constraints.maxWidth;
               final lMidi = widget.myLow.isNotEmpty
                   ? PitchService.noteToMidi(widget.myLow).clamp(_vizMin, _vizMax)
                   : -1;
@@ -1217,212 +1209,139 @@ class _SongKeyMapState extends State<_SongKeyMap> {
                   ? PitchService.noteToMidi(widget.myHigh).clamp(_vizMin, _vizMax)
                   : -1;
 
+              final data = withKey.map((s) {
+                final offset = s.keyOffsetFor(widget.preferredBrand);
+                final midi = PitchService.origKeyToMidi(s.origKey, offset);
+                final chipX = (_frac(midi.clamp(_vizMin, _vizMax)) * W - _chipW / 2)
+                    .clamp(0.0, W - _chipW);
+                final color = _chipColor(midi);
+                return (song: s, midi: midi, chipX: chipX, color: color);
+              }).toList()
+                ..sort((a, b) => a.chipX.compareTo(b.chipX));
+
+              final chipXs = data.map((d) => d.chipX).toList();
+              final rows = _assignRows(chipXs);
+              final numRows = rows.isEmpty ? 1 : rows.reduce(max) + 1;
+              final chipsH = numRows * _rowH + (_chipH - _rowH).clamp(0.0, double.infinity);
+
               return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Y축 레이블 (곡명)
-                      SizedBox(
-                        width: _nameW,
-                        child: Column(
-                          children: [
-                            // 상단 여백 (X축 상단 여백 맞춤)
-                            const SizedBox(height: 8),
-                            ...visible.map((d) {
-                              final isSelected = _selected?.id == d.song.id;
-                              return GestureDetector(
-                                onTap: () => setState(() =>
-                                    _selected = isSelected ? null : d.song),
-                                child: SizedBox(
-                                  height: _rowH,
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      d.song.title,
-                                      style: TextStyle(
-                                          fontSize: 11,
-                                          color: isSelected
-                                              ? AppColors.accent
-                                              : AppColors.textSecondary,
-                                          fontWeight: isSelected
-                                              ? FontWeight.w700
-                                              : FontWeight.normal),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                  // 칩 영역
+                  SizedBox(
+                    width: W,
+                    height: chipsH,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        for (int i = 0; i < data.length; i++)
+                          Positioned(
+                            left: data[i].chipX,
+                            top: rows[i] * _rowH,
+                            width: _chipW,
+                            height: _chipH,
+                            child: GestureDetector(
+                              onTap: () => setState(() =>
+                                  _selected = _selected?.id == data[i].song.id
+                                      ? null
+                                      : data[i].song),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: data[i].color.withOpacity(
+                                      _selected?.id == data[i].song.id ? 0.22 : 0.10),
+                                  borderRadius: BorderRadius.circular(11),
+                                  border: Border.all(
+                                    color: data[i].color.withOpacity(
+                                        _selected?.id == data[i].song.id ? 0.85 : 0.30),
+                                    width: _selected?.id == data[i].song.id ? 1.5 : 1.0,
                                   ),
                                 ),
-                              );
-                            }),
-                          ],
+                                alignment: Alignment.center,
+                                child: Text(
+                                  data[i].song.title,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: _selected?.id == data[i].song.id
+                                        ? data[i].color
+                                        : data[i].color.withOpacity(0.85),
+                                    fontWeight: _selected?.id == data[i].song.id
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // 범위 바
+                  Stack(
+                    children: [
+                      Container(
+                        width: W,
+                        height: _barH,
+                        decoration: BoxDecoration(
+                          color: AppColors.surface2,
+                          borderRadius: BorderRadius.circular(4),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      // 플롯 영역
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            const Positioned.fill(child: SizedBox()),
-                            // X축 전체 배경 및 그리드
-                            Positioned(
-                              top: 8,
-                              left: 0,
-                              right: 0,
-                              height: visible.length * _rowH,
-                              child: Stack(
-                                children: [
-                                  // 내 음역대 배경 밴드
-                                  if (lMidi >= 0 && hMidi >= 0)
-                                    Positioned(
-                                      left: _frac(lMidi) * plotW,
-                                      width: max(4.0, (_frac(hMidi) - _frac(lMidi)) * plotW),
-                                      top: 0,
-                                      bottom: 0,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: AppColors.accent.withOpacity(0.10),
-                                          borderRadius: BorderRadius.circular(3),
-                                        ),
-                                      ),
-                                    ),
-                                  // 옥타브 경계선 (C3, C4, C5)
-                                  for (final m in [48, 60, 72])
-                                    Positioned(
-                                      left: _frac(m) * plotW - 0.5,
-                                      top: 0,
-                                      bottom: 0,
-                                      width: 1,
-                                      child: Container(color: AppColors.border),
-                                    ),
-                                ],
-                              ),
+                      if (lMidi >= 0 && hMidi >= 0)
+                        Positioned(
+                          left: _frac(lMidi) * W,
+                          width: max(4.0, (_frac(hMidi) - _frac(lMidi)) * W),
+                          top: 0,
+                          height: _barH,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(colors: [
+                                AppColors.accent.withOpacity(0.5),
+                                AppColors.accent,
+                              ]),
+                              borderRadius: BorderRadius.circular(4),
                             ),
-                            // 곡별 행
-                            Positioned(
-                              top: 8,
-                              left: 0,
-                              right: 0,
-                              child: Column(
-                                children: visible.map((d) {
-                                  final origDotX = _frac(d.origMidi.clamp(_vizMin, _vizMax)) * plotW;
-                                  final dotX = _frac(d.midi.clamp(_vizMin, _vizMax)) * plotW;
-                                  final isSelected = _selected?.id == d.song.id;
-                                  return GestureDetector(
-                                    onTap: () => setState(() =>
-                                        _selected = isSelected ? null : d.song),
-                                    child: SizedBox(
-                                      height: _rowH,
-                                      child: Stack(
-                                        children: [
-                                          const Positioned.fill(child: SizedBox()),
-                                          // 트랙 선
-                                          Positioned(
-                                            left: 0,
-                                            right: 0,
-                                            top: _rowH / 2 - 0.5,
-                                            height: 1,
-                                            child: Container(
-                                              color: AppColors.border.withOpacity(0.5),
-                                            ),
-                                          ),
-                                          // 원키 hollow (오프셋 있을 때)
-                                          if (d.hasOffset)
-                                            Positioned(
-                                              left: (origDotX - 4).clamp(0.0, plotW - 8),
-                                              top: _rowH / 2 - 4,
-                                              child: Container(
-                                                width: 8,
-                                                height: 8,
-                                                decoration: BoxDecoration(
-                                                  shape: BoxShape.circle,
-                                                  border: Border.all(
-                                                      color: AppColors.textMuted.withOpacity(0.4),
-                                                      width: 1.5),
-                                                ),
-                                              ),
-                                            ),
-                                          // 조절키 filled
-                                          Positioned(
-                                            left: (dotX - 5).clamp(0.0, plotW - 10),
-                                            top: _rowH / 2 - 5,
-                                            child: Container(
-                                              width: 10,
-                                              height: 10,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                color: isSelected
-                                                    ? AppColors.accent
-                                                    : d.color,
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                      color: d.color.withOpacity(0.5),
-                                                      blurRadius: isSelected ? 8 : 4),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                            // X축 레이블
-                            Positioned(
-                              top: 8 + visible.length * _rowH + 4,
-                              left: 0,
-                              right: 0,
-                              child: Row(
-                                children: List.generate(_octaveMidi.length, (i) {
-                                  return Expanded(
-                                    flex: i < _octaveMidi.length - 1
-                                        ? ((_octaveMidi[i + 1] - _octaveMidi[i]) * 100).round()
-                                        : 1,
-                                    child: Align(
-                                      alignment: i == _octaveMidi.length - 1
-                                          ? Alignment.centerRight
-                                          : Alignment.centerLeft,
-                                      child: Text(_octaveLabels[i],
-                                          style: const TextStyle(
-                                              fontSize: 9, color: AppColors.textMuted)),
-                                    ),
-                                  );
-                                }),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
+                      for (final d in data)
+                        Positioned(
+                          left: (_frac(d.midi.clamp(_vizMin, _vizMax)) * W - 1)
+                              .clamp(0.0, W - 2),
+                          top: 0,
+                          width: 2,
+                          height: _barH,
+                          child: Container(
+                              color: d.color.withOpacity(0.65)),
+                        ),
                     ],
                   ),
-                  // Stack 높이 확보 (곡 행 + X축 레이블)
-                  SizedBox(height: visible.length * _rowH + 8 + 16),
-                  // 더 보기 / 접기
-                  if (allData.length > _pageSize)
-                    GestureDetector(
-                      onTap: () => setState(() => _showAll = !_showAll),
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              _showAll ? '접기' : '더 보기 $hiddenCount개',
-                              style: const TextStyle(
-                                  fontSize: 12, color: AppColors.textMuted),
-                            ),
-                            Icon(
-                              _showAll ? Icons.expand_less : Icons.expand_more,
-                              color: AppColors.textMuted,
-                              size: 16,
-                            ),
-                          ],
-                        ),
+                  const SizedBox(height: 4),
+                  // 내 음역대 라벨
+                  if (lMidi >= 0 && hMidi >= 0)
+                    SizedBox(
+                      width: W,
+                      height: 16,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Positioned(
+                            left: (_frac(lMidi) * W).clamp(0.0, W - 36),
+                            child: Text(widget.myLow,
+                                style: const TextStyle(
+                                    fontSize: 10, color: AppColors.accent)),
+                          ),
+                          Positioned(
+                            left: (_frac(hMidi) * W - 24).clamp(0.0, W - 24),
+                            child: Text(widget.myHigh,
+                                style: const TextStyle(
+                                    fontSize: 10, color: AppColors.accent)),
+                          ),
+                        ],
                       ),
                     ),
-                  // 선택된 곡 정보 패널
+                  // 정보 패널
                   const Divider(color: AppColors.border, height: 20),
                   Builder(builder: (_) {
                     if (_selected == null) {
@@ -1472,7 +1391,6 @@ class _SongKeyMapState extends State<_SongKeyMap> {
               );
             }),
 
-          // 원키 미입력 구분선 + 목록
           if (noKey.isNotEmpty) ...[
             const SizedBox(height: 10),
             Row(
