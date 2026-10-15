@@ -1155,14 +1155,20 @@ class _SongKeyMapState extends State<_SongKeyMap> {
         : -1;
 
     // Selected song data
-    int? selMidi;
+    int? selOrigMidi;
+    int? selAdjMidi;
     Color selColor = AppColors.textMuted;
-    String selKeyLabel = '';
+    String selOrigLabel = '';
+    String selAdjLabel = '';
+    bool selHasOffset = false;
     if (_selected != null) {
       final offset = _selected!.keyOffsetFor(widget.preferredBrand);
-      selMidi = PitchService.origKeyToMidi(_selected!.origKey, offset);
-      selColor = _fitColor(selMidi);
-      selKeyLabel = '${_selected!.origKey}${offset == 0 ? '' : (offset > 0 ? '+$offset' : '$offset')}';
+      selHasOffset = offset != 0;
+      selOrigMidi = PitchService.origKeyToMidi(_selected!.origKey, 0);
+      selAdjMidi = PitchService.origKeyToMidi(_selected!.origKey, offset);
+      selColor = _fitColor(selAdjMidi);
+      selOrigLabel = _selected!.origKey;
+      selAdjLabel = '${_selected!.origKey}${offset > 0 ? '+$offset' : '$offset'}';
     }
 
     return Container(
@@ -1240,18 +1246,41 @@ class _SongKeyMapState extends State<_SongKeyMap> {
                           style: const TextStyle(fontSize: 9, color: AppColors.accent)),
                     ),
                   // 선택된 곡 마커
-                  if (selMidi != null) ...[
-                    // 세로선
+                  if (selAdjMidi != null) ...[
+                    // 원키 hollow 마커 (오프셋 있을 때만)
+                    if (selHasOffset && selOrigMidi != null) ...[
+                      Positioned(
+                        left: (_frac(selOrigMidi.clamp(_vizMin, _vizMax)) * W - 5).clamp(0.0, W - 10),
+                        top: 30,
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.textMuted, width: 2),
+                          ),
+                        ),
+                      ),
+                      // 원키 라벨
+                      Positioned(
+                        left: (_frac(selOrigMidi.clamp(_vizMin, _vizMax)) * W - 14).clamp(0.0, W - 28),
+                        top: 0,
+                        child: Text(selOrigLabel,
+                            style: const TextStyle(
+                                fontSize: 10, color: AppColors.textMuted)),
+                      ),
+                    ],
+                    // 조정키 세로선
                     Positioned(
-                      left: (_frac(selMidi.clamp(_vizMin, _vizMax)) * W - 1).clamp(0.0, W - 2),
+                      left: (_frac(selAdjMidi.clamp(_vizMin, _vizMax)) * W - 1).clamp(0.0, W - 2),
                       top: 18,
                       width: 2,
                       height: 26,
                       child: Container(color: selColor),
                     ),
-                    // 도트
+                    // 조정키 filled 도트
                     Positioned(
-                      left: (_frac(selMidi.clamp(_vizMin, _vizMax)) * W - 5).clamp(0.0, W - 10),
+                      left: (_frac(selAdjMidi.clamp(_vizMin, _vizMax)) * W - 5).clamp(0.0, W - 10),
                       top: 30,
                       child: Container(
                         width: 10,
@@ -1263,10 +1292,10 @@ class _SongKeyMapState extends State<_SongKeyMap> {
                         ),
                       ),
                     ),
-                    // 키 라벨 (위)
+                    // 조정키 라벨 (위)
                     Positioned(
-                      left: (_frac(selMidi.clamp(_vizMin, _vizMax)) * W - 18).clamp(0.0, W - 36),
-                      top: 0,
+                      left: (_frac(selAdjMidi.clamp(_vizMin, _vizMax)) * W - 18).clamp(0.0, W - 36),
+                      top: selHasOffset ? 14 : 0,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
@@ -1274,7 +1303,7 @@ class _SongKeyMapState extends State<_SongKeyMap> {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: selColor.withOpacity(0.5)),
                         ),
-                        child: Text(selKeyLabel,
+                        child: Text(selHasOffset ? selAdjLabel : selOrigLabel,
                             style: TextStyle(
                                 fontSize: 10,
                                 color: selColor,
