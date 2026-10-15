@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:share_plus/share_plus.dart';
 import '../db/database.dart';
 import '../models/song.dart';
@@ -106,6 +108,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _exportJson() async {
     final json = await _db.exportJson();
     await Share.share(json, subject: '내 노래책 백업.json');
+  }
+
+  Future<void> _importJson() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+    if (result == null || result.files.single.path == null) return;
+    try {
+      final content = await File(result.files.single.path!).readAsString();
+      final count = await _db.importJson(content);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$count곡 가져오기 완료'),
+            backgroundColor: AppColors.surface2,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('파일을 읽을 수 없어요'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _deleteAll() async {
@@ -263,6 +294,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       fontSize: 12,
                                       color: AppColors.textMuted)),
                               onTap: _exportJson,
+                            ),
+                            _ActionRow(
+                              leading: const Icon(Icons.upload_outlined,
+                                  color: AppColors.textSecondary, size: 22),
+                              label: '데이터 가져오기',
+                              trailing: const Text('JSON',
+                                  style: TextStyle(
+                                      fontFamily: 'JetBrains Mono',
+                                      fontSize: 12,
+                                      color: AppColors.textMuted)),
+                              onTap: _importJson,
                             ),
                             _ActionRow(
                               leading: const Icon(Icons.delete_forever_outlined,

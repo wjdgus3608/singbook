@@ -21,6 +21,7 @@ dependencies:
   path_provider: ^2.1.2
   pitch_detector_dart: ^0.0.4
   shared_preferences: ^2.3.3
+  file_picker: ^8.0.0
 
 dev_dependencies:
   flutter_test:

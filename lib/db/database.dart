@@ -210,4 +210,18 @@ class DatabaseHelper {
     final list = songs.map((s) => s.toMap()).toList();
     return const JsonEncoder.withIndent('  ').convert(list);
   }
+
+  // Returns number of imported songs
+  Future<int> importJson(String jsonStr) async {
+    final list = jsonDecode(jsonStr) as List;
+    int count = 0;
+    for (final item in list) {
+      try {
+        final song = Song.fromMap(Map<String, dynamic>.from(item as Map));
+        await upsert(song);
+        count++;
+      } catch (_) {}
+    }
+    return count;
+  }
 }
