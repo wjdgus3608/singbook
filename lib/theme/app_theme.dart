@@ -5,8 +5,11 @@ class AppColors {
   static const bg = Color(0xFF0B0B0F);
   static const surface = Color(0xFF13131A);
   static const surface2 = Color(0xFF16161D);
+  static const surface3 = Color(0xFF1F1F28);
   static const border = Color(0xFF1E1E26);
   static const border2 = Color(0xFF2A2A35);
+  static const accentLine = Color(0x668B7BFF);
+  static const textLabel = Color(0xFF5C5C6A);
   static const accent = Color(0xFF8B7BFF);
   static const accentLight = Color(0xFFB3A8FF);
   static const accentBg = Color(0x248B7BFF);

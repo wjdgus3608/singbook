@@ -23,6 +23,14 @@ class _DetailScreenState extends State<DetailScreen> {
 
   static const _noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 
+  String _transposedKeyLabel(int offset) {
+    if (_origKey.isEmpty) return '';
+    final idx = _noteNames.indexOf(_origKey);
+    if (idx < 0) return '';
+    final newIdx = ((idx + offset) % 12 + 12) % 12;
+    return '${_noteNames[newIdx]} 장조';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -209,11 +217,11 @@ class _DetailScreenState extends State<DetailScreen> {
                         ],
                       ),
                     ),
-                    // Per-brand key rows
+                    // Key panel
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Container(
-                        padding: const EdgeInsets.all(18),
+                        padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
                         decoration: BoxDecoration(
                           color: AppColors.surface,
                           borderRadius: BorderRadius.circular(16),
@@ -221,6 +229,7 @@ class _DetailScreenState extends State<DetailScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Header: "내 키" + brand tabs
                             Row(
                               children: [
                                 const Text('내 키',
@@ -244,9 +253,7 @@ class _DetailScreenState extends State<DetailScreen> {
                                         borderRadius: BorderRadius.circular(8),
                                         border: hasValue && !selected
                                             ? Border.all(
-                                                color: AppColors.accent
-                                                    .withOpacity(0.4),
-                                                width: 1)
+                                                color: AppColors.accent.withOpacity(0.4))
                                             : null,
                                       ),
                                       child: Text(Song.brandLabels[b]!,
@@ -263,12 +270,115 @@ class _DetailScreenState extends State<DetailScreen> {
                                 }),
                               ],
                             ),
+                            const SizedBox(height: 14),
+                            // Stepper
+                            Builder(builder: (_) {
+                              final val = _keyOffsets[_selectedBrand] ?? 0;
+                              final isZero = val == 0;
+                              final valStr = val > 0 ? '+$val' : '$val';
+                              return Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  // Minus button
+                                  GestureDetector(
+                                    onTap: val > -7
+                                        ? () => setState(
+                                            () => _keyOffsets[_selectedBrand] = val - 1)
+                                        : null,
+                                    child: Container(
+                                      width: 52, height: 52,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: val > -7
+                                            ? AppColors.surface3
+                                            : AppColors.surface3.withOpacity(0.4),
+                                      ),
+                                      child: Icon(Icons.remove,
+                                          color: val > -7
+                                              ? AppColors.textPrimary
+                                              : AppColors.textMuted,
+                                          size: 28),
+                                    ),
+                                  ),
+                                  // Center: offset number + transposed key
+                                  Column(
+                                    children: [
+                                      Text(valStr,
+                                          style: AppTheme.mono(
+                                              52, FontWeight.w800,
+                                              isZero
+                                                  ? AppColors.textMuted
+                                                  : AppColors.accent)
+                                              .copyWith(
+                                            shadows: isZero
+                                                ? null
+                                                : [
+                                                    Shadow(
+                                                      color: AppColors.accent
+                                                          .withOpacity(0.5),
+                                                      blurRadius: 24,
+                                                      offset: Offset.zero,
+                                                    ),
+                                                  ],
+                                          )),
+                                      if (_origKey.isNotEmpty)
+                                        Text(
+                                          isZero
+                                              ? '원키'
+                                              : _transposedKeyLabel(val),
+                                          style: const TextStyle(
+                                              fontSize: 13,
+                                              color: AppColors.textSecondary),
+                                        ),
+                                    ],
+                                  ),
+                                  // Plus button
+                                  GestureDetector(
+                                    onTap: val < 7
+                                        ? () => setState(
+                                            () => _keyOffsets[_selectedBrand] = val + 1)
+                                        : null,
+                                    child: Container(
+                                      width: 52, height: 52,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: val < 7
+                                            ? AppColors.surface3
+                                            : AppColors.surface3.withOpacity(0.4),
+                                      ),
+                                      child: Icon(Icons.add,
+                                          color: val < 7
+                                              ? AppColors.textPrimary
+                                              : AppColors.textMuted,
+                                          size: 28),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }),
                             const SizedBox(height: 16),
-                            _BrandRow(
-                              label: Song.brandLabels[_selectedBrand]!,
+                            // Slider
+                            _KeySlider(
                               value: _keyOffsets[_selectedBrand] ?? 0,
                               onChanged: (v) =>
                                   setState(() => _keyOffsets[_selectedBrand] = v),
+                            ),
+                            const SizedBox(height: 6),
+                            // Tick labels
+                            Row(
+                              children: [
+                                Text('-7',
+                                    style: AppTheme.mono(
+                                        11, FontWeight.normal, AppColors.textLabel)),
+                                const Spacer(),
+                                Text('0',
+                                    style: AppTheme.mono(
+                                        11, FontWeight.normal, AppColors.textLabel)),
+                                const Spacer(),
+                                Text('+7',
+                                    style: AppTheme.mono(
+                                        11, FontWeight.normal, AppColors.textLabel)),
+                              ],
                             ),
                           ],
                         ),
@@ -389,78 +499,85 @@ class _DetailScreenState extends State<DetailScreen> {
   }
 }
 
-class _BrandRow extends StatelessWidget {
-  final String label;
+class _KeySlider extends StatelessWidget {
   final int value;
   final ValueChanged<int> onChanged;
-  const _BrandRow(
-      {required this.label, required this.value, required this.onChanged});
+  const _KeySlider({required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    final active = value != 0;
-    final valueStr = value > 0 ? '+$value' : '$value';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 36,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 14, color: AppColors.textSecondary)),
-          ),
-          const Spacer(),
-          _Btn(
-            icon: Icons.remove,
-            enabled: value > -7,
-            onTap: () => onChanged(value - 1),
-          ),
-          SizedBox(
-            width: 64,
-            child: Center(
-              child: Text(valueStr,
-                  style: AppTheme.mono(
-                      24,
-                      FontWeight.w800,
-                      active ? AppColors.accent : AppColors.textMuted)),
-            ),
-          ),
-          _Btn(
-            icon: Icons.add,
-            enabled: value < 7,
-            onTap: () => onChanged(value + 1),
-          ),
-        ],
-      ),
-    );
-  }
-}
+    return LayoutBuilder(builder: (_, constraints) {
+      const pad = 13.0;
+      final w = constraints.maxWidth - pad * 2;
+      final step = w / 14.0;
+      final thumbCx = (value + 7) * step + pad;
+      final zeroCx = 7 * step + pad;
 
-class _Btn extends StatelessWidget {
-  final IconData icon;
-  final bool enabled;
-  final VoidCallback onTap;
-  const _Btn({required this.icon, required this.enabled, required this.onTap});
+      void _updateValue(double dx) {
+        final pos = (dx - pad).clamp(0.0, w);
+        final v = ((pos / w * 14) - 7).round().clamp(-7, 7);
+        onChanged(v);
+      }
 
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: enabled
-              ? const Color(0xFF1F1F28)
-              : const Color(0xFF1F1F28).withOpacity(0.4),
+      return GestureDetector(
+        onHorizontalDragUpdate: (d) => _updateValue(d.localPosition.dx),
+        onTapUp: (d) => _updateValue(d.localPosition.dx),
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          height: 28,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Track background
+              Positioned(
+                left: pad, right: pad, top: 12, height: 4,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF24242E),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              // Accent fill from 0 to current
+              if (value != 0)
+                Positioned(
+                  left: value > 0 ? zeroCx : thumbCx,
+                  width: (thumbCx - zeroCx).abs(),
+                  top: 12, height: 4,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.accent,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              // Zero position marker
+              Positioned(
+                left: zeroCx - 1,
+                top: 6, width: 2, height: 16,
+                child: Container(color: AppColors.textLabel),
+              ),
+              // Thumb (18px white circle + 4px accent ring = 26px total)
+              Positioned(
+                left: thumbCx - 13,
+                top: 1,
+                child: Container(
+                  width: 26, height: 26,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.textPrimary,
+                    border: Border.all(
+                      color: AppColors.accent.withOpacity(0.35),
+                      width: 4,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-        child: Icon(icon,
-            color: enabled ? AppColors.textPrimary : AppColors.textMuted,
-            size: 22),
-      ),
-    );
+      );
+    });
   }
 }
 
