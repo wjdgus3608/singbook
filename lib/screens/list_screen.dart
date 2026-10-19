@@ -218,6 +218,7 @@ class _TagChip extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: active
               ? AppColors.accent.withOpacity(0.16)

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../db/database.dart';
 import '../models/song.dart';
 import '../services/music_search_service.dart';
+import '../services/preferences_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/help_sheet.dart';
 import 'detail_screen.dart';
@@ -23,13 +24,23 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _hasQuery = false;
   bool _searching = false;
   String? _error;
-
-  static const _recent = ['아이유', 'aespa', '윤하', 'BTS'];
+  List<String> _recentSearches = [];
 
   @override
   void initState() {
     super.initState();
     _loadSaved();
+    _loadRecentSearches();
+  }
+
+  Future<void> _loadRecentSearches() async {
+    final list = await PreferencesService.getRecentSearches();
+    if (mounted) setState(() => _recentSearches = list);
+  }
+
+  Future<void> _saveRecentSearch(String q) async {
+    await PreferencesService.addRecentSearch(q);
+    _loadRecentSearches();
   }
 
   Future<void> _loadSaved() async {
@@ -146,10 +157,13 @@ class _SearchScreenState extends State<SearchScreen> {
                     contentPadding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   onChanged: _onSearch,
+                  onSubmitted: (q) {
+                    if (q.trim().isNotEmpty) _saveRecentSearch(q.trim());
+                  },
                 ),
               ),
             ),
-            if (!_hasQuery) ...[
+            if (!_hasQuery && _recentSearches.isNotEmpty) ...[
               const Padding(
                 padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: Text('최근 검색',
@@ -160,10 +174,11 @@ class _SearchScreenState extends State<SearchScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                 child: Wrap(
                   spacing: 8,
-                  children: _recent
+                  children: _recentSearches
                       .map((r) => GestureDetector(
                             onTap: () {
                               _ctrl.text = r;
+                              _saveRecentSearch(r);
                               _onSearch(r);
                             },
                             child: Container(
