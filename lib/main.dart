@@ -7,6 +7,7 @@ import 'screens/list_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/recognize_screen.dart';
 import 'screens/range_screen.dart';
+import 'screens/splash_screen.dart';
 
 // TODO: 실제 출시 전 아래 ID를 AdMob 콘솔에서 발급받은 ID로 교체
 const _kAndroidBannerId = 'ca-app-pub-3940256099942544/6300978111';
@@ -32,7 +33,7 @@ class SingbookApp extends StatelessWidget {
       title: '내 노래책',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
-      home: const _RootScaffold(),
+      home: const SplashScreen(next: _RootScaffold()),
     );
   }
 }
