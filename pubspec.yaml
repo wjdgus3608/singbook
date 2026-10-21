@@ -22,6 +22,7 @@ dependencies:
   pitch_detector_dart: ^0.0.4
   shared_preferences: ^2.3.3
   file_picker: ^8.0.0
+  google_mobile_ads: ^5.1.0
 
 dev_dependencies:
   flutter_test:

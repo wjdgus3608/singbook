@@ -1,17 +1,25 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'theme/app_theme.dart';
 import 'screens/list_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/recognize_screen.dart';
 import 'screens/range_screen.dart';
 
-void main() {
+// TODO: 실제 출시 전 아래 ID를 AdMob 콘솔에서 발급받은 ID로 교체
+const _kAndroidBannerId = 'ca-app-pub-3940256099942544/6300978111';
+const _kIosBannerId     = 'ca-app-pub-3940256099942544/2934735716';
+String get _bannerAdUnitId => Platform.isAndroid ? _kAndroidBannerId : _kIosBannerId;
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
   ));
+  await MobileAds.instance.initialize();
   runApp(const SingbookApp());
 }
 
@@ -40,6 +48,7 @@ class _RootScaffoldState extends State<_RootScaffold> {
   int _tab = 0;
   final _listKey = GlobalKey<ListScreenState>();
   final _rangeKey = GlobalKey<RangeScreenState>();
+  BannerAd? _bannerAd;
 
   late final _screens = [
     ListScreen(key: _listKey),
@@ -49,6 +58,33 @@ class _RootScaffoldState extends State<_RootScaffold> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadBanner();
+  }
+
+  Future<void> _loadBanner() async {
+    final banner = BannerAd(
+      adUnitId: _bannerAdUnitId,
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) setState(() => _bannerAd = ad as BannerAd);
+        },
+        onAdFailedToLoad: (ad, error) => ad.dispose(),
+      ),
+    );
+    await banner.load();
+  }
+
+  @override
+  void dispose() {
+    _bannerAd?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -56,14 +92,24 @@ class _RootScaffoldState extends State<_RootScaffold> {
         index: _tab,
         children: _screens,
       ),
-      bottomNavigationBar: Container(
-        color: AppColors.navBg,
-        child: SafeArea(
-          top: false,
-          child: SizedBox(
-            height: 60,
-            child: Row(
-              children: [
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_bannerAd != null)
+            Container(
+              color: AppColors.navBg,
+              width: double.infinity,
+              height: _bannerAd!.size.height.toDouble(),
+              child: AdWidget(ad: _bannerAd!),
+            ),
+          Container(
+            color: AppColors.navBg,
+            child: SafeArea(
+              top: false,
+              child: SizedBox(
+                height: 60,
+                child: Row(
+                  children: [
                 _NavItem(
                   icon: Icons.library_music_outlined,
                   activeIcon: Icons.library_music,
@@ -102,6 +148,8 @@ class _RootScaffoldState extends State<_RootScaffold> {
             ),
           ),
         ),
+          ),
+        ],
       ),
     );
   }
